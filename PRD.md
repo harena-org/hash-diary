@@ -12,8 +12,9 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 |------|------|
 | 链上存储 | 利用 Solana Memo Program 将日记内容附加到交易中，永久存储在区块链上 |
 | 自发自收交易 | 交易的目标地址是当前钱包自身，形成"给自己写信"的模式 |
-| Base64 编码 | 日记内容在发送前必须进行 Base64 编码 |
-| 512 字节限制 | 单条 Memo 最大 512 字节（编码后），超出需截断或拒绝 |
+| 公钥加密 | 日记内容使用钱包公钥加密后再进行 Base64 编码，仅持有对应私钥的钱包可解密 |
+| Base64 编码 | 加密后的内容在发送前必须进行 Base64 编码 |
+| 512 字节限制 | 单条 Memo 最大 512 字节（加密 + 编码后），超出需截断或拒绝 |
 | MCP 协议 | 通过标准化的 MCP Server 暴露工具能力，供 AI Agent 调用 |
 
 ## 3. 目标用户
@@ -26,13 +27,13 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 
 ### 4.1 网络配置
 
-- **默认网络**: devnet
-- **可选网络**: mainnet-beta、testnet
-- 用户通过命令行参数指定网络，例如 `--network mainnet`
-- 支持的 RPC 端点：
+- **默认 RPC**: `https://api.devnet.solana.com`（devnet）
+- 用户通过 `-u` / `--url` 参数指定 Solana RPC 端点 URL，例如 `-u https://api.mainnet-beta.solana.com`
+- 常用 RPC 端点：
   - devnet: `https://api.devnet.solana.com`
   - testnet: `https://api.testnet.solana.com`
   - mainnet-beta: `https://api.mainnet-beta.solana.com`
+- 也可指定自定义 RPC 端点（如 Helius、QuickNode 等）
 
 ### 4.2 钱包管理
 
@@ -46,16 +47,17 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 
 **流程**:
 1. 用户输入文本内容
-2. 对文本进行 Base64 编码
-3. 校验编码后大小不超过 512 字节，超出则报错提示
-4. 构建交易：目标地址为当前钱包，附带 Memo 指令
-5. 签名并发送交易
-6. 返回交易签名（Transaction Signature）供用户查询
+2. 使用钱包公钥对文本进行加密
+3. 对加密后的内容进行 Base64 编码
+4. 校验编码后大小不超过 512 字节，超出则报错提示
+5. 构建交易：目标地址为当前钱包，附带 Memo 指令
+6. 签名并发送交易
+7. 返回交易签名（Transaction Signature）供用户查询
 
 **命令示例**:
 ```bash
 hash-diary write "今天天气很好"
-hash-diary write "Hello World" --network mainnet
+hash-diary write "Hello World" -u https://api.mainnet-beta.solana.com
 hash-diary write "日记内容" --keypair ./my-wallet.json
 ```
 
@@ -72,13 +74,15 @@ hash-diary write "日记内容" --keypair ./my-wallet.json
 1. 获取当前钱包地址的交易历史
 2. 筛选包含 Memo 指令的交易
 3. 对 Memo 数据进行 Base64 解码
-4. 展示日记内容列表，包含时间戳和内容
+4. 使用钱包私钥解密内容，解密失败的记录自动忽略（跳过）
+5. 展示日记内容列表，包含时间戳和内容
 
 **命令示例**:
 ```bash
 hash-diary read
-hash-diary read --network mainnet
+hash-diary read -u https://api.mainnet-beta.solana.com
 hash-diary read --limit 10
+hash-diary read --since 2026-02-01
 ```
 
 **输出示例**:
@@ -90,8 +94,9 @@ hash-diary read --limit 10
 ### 4.5 内容约束
 
 - **仅支持文本**: 不支持图片、文件等非文本内容
-- **大小限制**: Memo 最大 512 字节（Base64 编码后）
-- **编码方式**: 统一使用 Base64 编码
+- **大小限制**: Memo 最大 512 字节（加密 + Base64 编码后）
+- **加密方式**: 使用钱包公钥加密，确保链上数据仅钱包持有者可读
+- **编码方式**: 加密后统一使用 Base64 编码
 
 ### 4.6 MCP Server 模式
 
@@ -100,7 +105,7 @@ hash-diary read --limit 10
 **启动方式**:
 ```bash
 hash-diary mcp
-hash-diary mcp --network mainnet
+hash-diary mcp -u https://api.mainnet-beta.solana.com
 ```
 
 **暴露的 MCP Tools**:
@@ -122,6 +127,7 @@ hash-diary mcp --network mainnet
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | limit | number | 否 | 返回记录数量，默认 7 |
+| since | string | 否 | 起始日期过滤，格式 YYYY-MM-DD |
 
 返回值：日记条目数组，每条包含 `timestamp` 和 `content` 字段。
 
@@ -149,13 +155,14 @@ hash-diary <subcommand> [options]
   mcp                以 MCP Server 模式运行
 
 全局选项:
-  --network <net>    指定网络: devnet(默认) | testnet | mainnet
+  -u, --url <rpc>    指定 Solana RPC 端点 URL (默认: https://api.devnet.solana.com)
   --keypair <path>   指定钱包密钥文件路径 (默认: ~/.hash-diary/id.json)
   --help             显示帮助信息
   --version          显示版本号
 
 read 选项:
   --limit <n>        限制返回记录数量 (默认: 7)
+  --since <date>     起始日期过滤，格式 YYYY-MM-DD
 ```
 
 ## 6. 技术要求
@@ -164,8 +171,9 @@ read 选项:
 |------|------|
 | 区块链 | Solana |
 | 链上程序 | Memo Program (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`) |
+| 内容加密 | 钱包公钥加密 |
 | 编码格式 | Base64 |
-| 单条上限 | 512 字节 (编码后) |
+| 单条上限 | 512 字节 (加密 + 编码后) |
 | 交易模式 | 自发自收 (目标地址 = 当前钱包地址) |
 | 工具形态 | 命令行 CLI + MCP Server |
 | 钱包路径 | `~/.hash-diary/id.json` |
