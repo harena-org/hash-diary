@@ -41,7 +41,84 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 - 支持通过参数指定密钥文件路径，例如 `--keypair /path/to/keypair.json`
 - 钱包地址既作为交易发送方，也作为交易接收方（自发自收）
 
-### 4.3 写入子命令 (write)
+### 4.3 钱包管理子命令 (wallet)
+
+**功能描述**: 管理 HashDiary 使用的 Solana 钱包，包括创建、查看、导入密钥对。
+
+#### `wallet new` — 创建新钱包
+
+生成新的 Solana 密钥对，保存到默认路径 `~/.hash-diary/id.json`。
+
+**流程**:
+1. 检查目标路径是否已存在密钥文件
+2. 若已存在，提示用户确认是否覆盖（`--force` 可跳过确认）
+3. 生成新的 Ed25519 密钥对
+4. 将密钥对保存为 JSON 格式文件
+5. 输出新钱包的公钥地址
+
+**命令示例**:
+```bash
+hash-diary wallet new
+hash-diary wallet new --keypair ./my-wallet.json
+hash-diary wallet new --force
+```
+
+**输出示例**:
+```
+钱包已创建，地址: 7xKX...3nPq
+密钥文件已保存至: ~/.hash-diary/id.json
+```
+
+#### `wallet show` — 查看钱包信息
+
+显示当前钱包的公钥地址和 SOL 余额。
+
+**命令示例**:
+```bash
+hash-diary wallet show
+hash-diary wallet show -u https://api.mainnet-beta.solana.com
+hash-diary wallet show --keypair ./my-wallet.json
+```
+
+**输出示例**:
+```
+地址: 7xKX...3nPq
+余额: 1.5 SOL
+网络: devnet
+```
+
+#### `wallet airdrop` — 领取测试代币
+
+在 devnet/testnet 上领取测试用 SOL（仅限非 mainnet 网络）。
+
+**命令示例**:
+```bash
+hash-diary wallet airdrop
+hash-diary wallet airdrop --amount 2
+```
+
+**输出示例**:
+```
+已领取 1 SOL，当前余额: 2.5 SOL
+```
+
+#### `wallet import` — 导入已有钱包
+
+从已有的密钥文件或私钥导入钱包。
+
+**命令示例**:
+```bash
+hash-diary wallet import /path/to/existing-keypair.json
+hash-diary wallet import --private-key <base58-private-key>
+```
+
+**输出示例**:
+```
+钱包已导入，地址: 9aBC...xY2z
+密钥文件已保存至: ~/.hash-diary/id.json
+```
+
+### 4.4 写入子命令 (write)
 
 **功能描述**: 将文本内容作为 Memo 写入 Solana 链上。
 
@@ -66,7 +143,7 @@ hash-diary write "日记内容" --keypair ./my-wallet.json
 交易已发送，签名: 5UfD...xK3m
 ```
 
-### 4.4 读取子命令 (read)
+### 4.5 读取子命令 (read)
 
 **功能描述**: 查询当前钱包地址的历史 Memo 交易，解码并展示日记内容。
 
@@ -91,14 +168,14 @@ hash-diary read --since 2026-02-01
 [2026-03-01 08:15:00] Hello World
 ```
 
-### 4.5 内容约束
+### 4.6 内容约束
 
 - **仅支持文本**: 不支持图片、文件等非文本内容
 - **大小限制**: Memo 最大 512 字节（加密 + Base64 编码后）
 - **加密方式**: 使用钱包公钥加密，确保链上数据仅钱包持有者可读
 - **编码方式**: 加密后统一使用 Base64 编码
 
-### 4.6 MCP Server 模式
+### 4.7 MCP Server 模式
 
 **功能描述**: 以 MCP Server 运行，通过 stdio 传输向 AI Agent 暴露日记读写工具。
 
@@ -150,6 +227,7 @@ hash-diary mcp -u https://api.mainnet-beta.solana.com
 hash-diary <subcommand> [options]
 
 子命令:
+  wallet             钱包管理
   write <text>       将文本写入链上
   read               读取链上日记记录
   mcp                以 MCP Server 模式运行
@@ -159,6 +237,17 @@ hash-diary <subcommand> [options]
   --keypair <path>   指定钱包密钥文件路径 (默认: ~/.hash-diary/id.json)
   --help             显示帮助信息
   --version          显示版本号
+
+wallet 子命令:
+  wallet new         创建新钱包密钥对
+  wallet show        查看钱包地址和余额
+  wallet airdrop     领取测试代币 (仅 devnet/testnet)
+  wallet import      导入已有钱包
+
+wallet 选项:
+  --force            覆盖已有密钥文件（wallet new）
+  --amount <n>       领取代币数量，默认 1 SOL（wallet airdrop）
+  --private-key <k>  通过 Base58 私钥导入（wallet import）
 
 read 选项:
   --limit <n>        限制返回记录数量 (默认: 7)
@@ -184,7 +273,10 @@ read 选项:
 | 场景 | 处理方式 |
 |------|----------|
 | 内容超过 512 字节 | 报错提示，拒绝发送 |
-| 钱包文件不存在 | 报错提示，引导用户创建或指定路径 |
+| 钱包文件不存在 | 报错提示，引导用户执行 `wallet new` 创建或指定路径 |
+| 钱包文件已存在（wallet new） | 提示确认覆盖，或使用 `--force` 跳过确认 |
+| 在 mainnet 上执行 airdrop | 报错提示，airdrop 仅支持 devnet/testnet |
+| 导入的私钥格式无效 | 报错提示，告知支持的格式 |
 | 余额不足 | 报错提示，告知当前余额和所需费用 |
 | 网络连接失败 | 报错提示，建议检查网络或 RPC 端点 |
 | 无历史记录 | 提示暂无日记记录 |
