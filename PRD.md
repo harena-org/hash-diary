@@ -191,29 +191,29 @@ echo "通过管道写入" | hash-diary write
 
 ### 4.4 读取子命令 (read)
 
-**功能描述**: 查询当前钱包地址的历史 Memo 交易，解码并展示日记内容。
+**功能描述**: 查询当前钱包地址的历史 Memo 交易，解码并展示日记内容。优先从本地缓存读取，仅拉取增量更新。
 
 **流程**:
-1. 获取当前钱包地址的交易历史
-2. 筛选 Memo 包含 `HD:` 前缀的交易，并去除前缀
-3. 对剩余数据进行 Base64 解码
-4. 将 Ed25519 密钥对转换为 X25519 密钥对，使用 NaCl box open 解密
-5. 使用 Zlib 解压还原文本内容（失败则忽略）
-6. 展示日记内容列表，包含时间戳和内容
+1. 读取本地缓存（如 `~/.hash-diary/cache.json`），获取已知的最新交易签名
+2. 从 RPC 节点拉取当前钱包的新交易（使用 `until` 参数指向本地最新签名）
+3. 筛选 Memo 包含 `HD:` 前缀的新交易，去除前缀
+4. 对新数据进行 Base64 解码 -> NaCl 解密 -> Zlib 解压
+5. 将新解密的日记追加到本地缓存中
+6. 根据用户查询条件（时间、关键词等）过滤并展示日记内容
 
 **命令示例**:
 ```bash
 hash-diary read
-hash-diary read -u https://api.mainnet-beta.solana.com
+hash-diary read --search "Solana"    # 关键词搜索
 hash-diary read --limit 10
 hash-diary read --since 2026-02-01
-hash-diary read --before 5UfD...xK3m
+hash-diary read --force-refresh      # 强制全量拉取（忽略缓存）
 ```
 
 **输出示例 (text)**:
 ```
 [2026-03-01 18:30:00 CST] 今天天气很好
-[2026-03-01 16:15:00 CST] Hello World
+[2026-03-01 16:15:00 CST] Hello World (包含关键词 "Solana")
 -- 更多记录: hash-diary read --before 3aBc...yZ9w
 ```
 
@@ -275,6 +275,7 @@ HASH_DIARY_PASSWORD=<password> hash-diary mcp
 |------|------|------|------|
 | limit | number | 否 | 返回记录数量，默认 7 |
 | since | string | 否 | 起始日期过滤，格式 YYYY-MM-DD |
+| search | string | 否 | 关键词过滤 |
 | before | string | 否 | 游标分页，返回指定交易签名之前的记录 |
 
 返回值：日记条目数组，每条包含 `timestamp`、`content` 和 `signature` 字段。
@@ -294,6 +295,29 @@ HASH_DIARY_PASSWORD=<password> hash-diary mcp
 }
 ```
 
+### 4.7 本地缓存机制 (新)
+
+**功能描述**: 为了提高读取性能并减少 RPC 调用，HashDiary 将在本地维护一份已解密日记的缓存。
+
+- **缓存文件**: `~/.hash-diary/cache.json` (或 SQLite)
+- **缓存结构**:
+  ```json
+  {
+    "wallet_address": {
+      "last_signature": "5UfD...xK3m", // 最新已同步的交易签名
+      "entries": [
+        {"sig": "...", "ts": 1740825000, "content": "..."}
+      ]
+    }
+  }
+  ```
+- **同步策略**:
+  - `read` 时先读取缓存。
+  - 调用 RPC `getSignaturesForAddress` 时带上 `until=<last_signature>` 参数，仅拉取增量交易。
+  - 解密新交易并追加到缓存。
+  - 若用户指定 `--force-refresh`，则忽略 `last_signature` 全量拉取并重建缓存。
+- **安全性**: 缓存文件存储的是明文日记内容，因此必须确保 `~/.hash-diary/` 目录仅当前用户可读写 (chmod 700)。
+
 ## 5. 命令行接口设计
 
 ```
@@ -310,6 +334,7 @@ hash-diary <subcommand> [options]
   --keypair <path>   指定钱包密钥文件路径 (默认: ~/.hash-diary/id.json)
   --password <pwd>   解锁加密钱包的密码（优先级：--password > HASH_DIARY_PASSWORD 环境变量 > 交互输入）
   --format <fmt>     输出格式: text | json (默认: text)
+  --verbose          显示详细日志（如 RPC 调用耗时、缓存命中情况）
   --help             显示帮助信息
   --version          显示版本号
 
@@ -328,8 +353,9 @@ wallet 选项:
 read 选项:
   --limit <n>        限制返回记录数量 (默认: 7)
   --since <date>     起始日期过滤，格式 YYYY-MM-DD（按本地时区）
+  --search <kw>      关键词搜索（本地过滤）
   --before <sig>     游标分页，返回指定交易签名之前的记录
-```
+  --force-refresh    忽略缓存，强制全量拉取链上数据
 
 ## 6. 技术要求
 
@@ -375,3 +401,5 @@ read 选项:
 - 所有交互提示（密码输入、覆盖确认等）必须输出到 stderr，保持 stdout 干净，确保 `--format json` 和管道场景正常工作
 - CLI 输出应简洁友好，支持中英文内容
 - MCP Server 模式下所有输出必须为 JSON-RPC 格式，不得输出人类可读的提示信息到 stdout
+- **费用说明**: 每条日记仅消耗 Solana 基础交易费（5000 lamports = 0.000005 SOL），在当前币价下几乎可忽略不计。
+- **缓存安全**: 缓存文件应使用严格的文件权限（600/700），避免被其他用户读取。
