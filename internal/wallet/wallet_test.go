@@ -286,8 +286,8 @@ func TestLoadEncrypted_WrongPassword(t *testing.T) {
 	if err == nil {
 		t.Fatal("LoadEncrypted() expected error for wrong password")
 	}
-	if !strings.Contains(err.Error(), "wrong password") {
-		t.Errorf("error message = %q, want to contain 'wrong password'", err.Error())
+	if !strings.Contains(err.Error(), "密码错误") {
+		t.Errorf("error message = %q, want to contain '密码错误'", err.Error())
 	}
 }
 
@@ -366,8 +366,8 @@ func TestLoadWallet_EncryptedNoProvider(t *testing.T) {
 	if err == nil {
 		t.Fatal("LoadWallet() expected error when no password provider for encrypted wallet")
 	}
-	if !strings.Contains(err.Error(), "password provider") {
-		t.Errorf("error message = %q, want to contain 'password provider'", err.Error())
+	if !strings.Contains(err.Error(), "--password") {
+		t.Errorf("error message = %q, want to contain '--password'", err.Error())
 	}
 }
 
@@ -570,8 +570,8 @@ func TestChainedProvider_AllFail(t *testing.T) {
 	if err == nil {
 		t.Fatal("GetPassword() expected error when all providers fail")
 	}
-	if !strings.Contains(err.Error(), "all password providers failed") {
-		t.Errorf("error message = %q, want to contain 'all password providers failed'", err.Error())
+	if !strings.Contains(err.Error(), "--password") {
+		t.Errorf("error message = %q, want to contain '--password'", err.Error())
 	}
 }
 
@@ -644,8 +644,8 @@ func TestImportFromBase58PrivateKey_WrongLength(t *testing.T) {
 	if err == nil {
 		t.Fatal("ImportFromBase58PrivateKey() expected error for wrong length")
 	}
-	if !strings.Contains(err.Error(), "invalid private key length") {
-		t.Errorf("error message = %q, want to contain 'invalid private key length'", err.Error())
+	if !strings.Contains(err.Error(), "无效的私钥长度") {
+		t.Errorf("error message = %q, want to contain '无效的私钥长度'", err.Error())
 	}
 }
 
@@ -880,4 +880,88 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// --- Wallet file not found suggests wallet new ---
+
+func TestLoadWallet_FileNotFound_SuggestsWalletNew(t *testing.T) {
+	_, err := LoadWallet("/nonexistent/path/id.json", nil)
+	if err == nil {
+		t.Fatal("LoadWallet() expected error for nonexistent file")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "wallet new") {
+		t.Errorf("error should suggest 'wallet new', got: %q", errMsg)
+	}
+	if !strings.Contains(errMsg, "--keypair") {
+		t.Errorf("error should suggest '--keypair', got: %q", errMsg)
+	}
+}
+
+// --- Wrong password gives clear error ---
+
+func TestLoadWallet_Encrypted_WrongPassword(t *testing.T) {
+	kp, err := GenerateKeypair()
+	if err != nil {
+		t.Fatalf("GenerateKeypair() error = %v", err)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "encrypted.json")
+
+	if err := SaveEncrypted(kp, path, "correct-password"); err != nil {
+		t.Fatalf("SaveEncrypted() error = %v", err)
+	}
+
+	_, err = LoadWallet(path, StaticPassword("wrong-password"))
+	if err == nil {
+		t.Fatal("LoadWallet() expected error for wrong password")
+	}
+	if !strings.Contains(err.Error(), "密码错误") {
+		t.Errorf("error should contain '密码错误', got: %q", err.Error())
+	}
+}
+
+// --- Encrypted wallet with no provider gives clear error ---
+
+func TestLoadWallet_Encrypted_NilProvider_SuggestsPasswordFlag(t *testing.T) {
+	kp, err := GenerateKeypair()
+	if err != nil {
+		t.Fatalf("GenerateKeypair() error = %v", err)
+	}
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "encrypted.json")
+
+	if err := SaveEncrypted(kp, path, "password"); err != nil {
+		t.Fatalf("SaveEncrypted() error = %v", err)
+	}
+
+	_, err = LoadWallet(path, nil)
+	if err == nil {
+		t.Fatal("LoadWallet() expected error when no password provider")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "--password") {
+		t.Errorf("error should mention '--password', got: %q", errMsg)
+	}
+	if !strings.Contains(errMsg, "HASH_DIARY_PASSWORD") {
+		t.Errorf("error should mention 'HASH_DIARY_PASSWORD', got: %q", errMsg)
+	}
+}
+
+// --- Invalid Base58 private key gives clear format hint ---
+
+func TestImportFromBase58PrivateKey_InvalidFormat_SuggestsFormat(t *testing.T) {
+	_, err := ImportFromBase58PrivateKey("notavalidbase58key!!!")
+	if err == nil {
+		t.Fatal("expected error for invalid Base58")
+	}
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "Base58") {
+		t.Errorf("error should mention 'Base58', got: %q", errMsg)
+	}
+	if !strings.Contains(errMsg, "Ed25519") {
+		t.Errorf("error should mention 'Ed25519', got: %q", errMsg)
+	}
 }

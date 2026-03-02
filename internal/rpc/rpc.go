@@ -406,11 +406,18 @@ func wrapNetworkError(err error) error {
 		strings.Contains(errMsg, "no such host") ||
 		strings.Contains(errMsg, "dial tcp") ||
 		strings.Contains(errMsg, "i/o timeout") {
-		return fmt.Errorf("network error: %w. Please check your network connection or try a different RPC endpoint", err)
+		return fmt.Errorf("网络错误: %w。请检查网络连接或尝试其他 RPC 端点（--url）", err)
 	}
 
 	if strings.Contains(errMsg, "429") || strings.Contains(errMsg, "rate limit") || strings.Contains(errMsg, "Too Many Requests") {
-		return fmt.Errorf("RPC rate limited: %w. Please wait and retry, or switch to a different RPC endpoint", err)
+		return fmt.Errorf("RPC 请求频率受限: %w。请稍后重试或切换 RPC 端点", err)
+	}
+
+	// Check for insufficient balance errors.
+	if strings.Contains(errMsg, "insufficient funds") ||
+		strings.Contains(errMsg, "Insufficient") ||
+		strings.Contains(errMsg, "0x1") { // InsufficientFunds error code
+		return fmt.Errorf("余额不足: %w。请通过 `hash-diary wallet airdrop`（devnet/testnet）充值", err)
 	}
 
 	return err

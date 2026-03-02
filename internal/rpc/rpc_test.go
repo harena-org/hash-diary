@@ -189,7 +189,7 @@ func TestGetBalance_RPCError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if got := err.Error(); !contains(got, "network error") {
+	if got := err.Error(); !contains(got, "网络错误") {
 		t.Errorf("expected network error message, got: %s", got)
 	}
 }
@@ -748,12 +748,17 @@ func TestWrapNetworkError(t *testing.T) {
 		{
 			name:    "connection refused",
 			err:     errors.New("dial tcp: connection refused"),
-			wantMsg: "network error",
+			wantMsg: "网络错误",
 		},
 		{
 			name:    "rate limit",
 			err:     errors.New("429 Too Many Requests"),
-			wantMsg: "RPC rate limited",
+			wantMsg: "RPC 请求频率受限",
+		},
+		{
+			name:    "insufficient funds",
+			err:     errors.New("insufficient funds for rent"),
+			wantMsg: "余额不足",
 		},
 		{
 			name:    "generic error",

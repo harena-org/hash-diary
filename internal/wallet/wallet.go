@@ -258,7 +258,7 @@ func parseEncrypted(data []byte, password string) (*Keypair, error) {
 	// Decrypt.
 	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		return nil, fmt.Errorf("wallet: wrong password or corrupted wallet file: %w", err)
+		return nil, fmt.Errorf("wallet: 密码错误，请确认输入的密码是否正确")
 	}
 
 	if len(plaintext) != ed25519.PrivateKeySize {
@@ -280,6 +280,9 @@ func parseEncrypted(data []byte, password string) (*Keypair, error) {
 func LoadWallet(path string, passwordProvider PasswordProvider) (*Keypair, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("wallet: 钱包文件不存在: %s，请先运行 `hash-diary wallet new` 或通过 --keypair 指定路径", path)
+		}
 		return nil, fmt.Errorf("wallet: failed to read wallet file %s: %w", path, err)
 	}
 
@@ -301,7 +304,7 @@ func LoadWallet(path string, passwordProvider PasswordProvider) (*Keypair, error
 	}
 
 	if passwordProvider == nil {
-		return nil, errors.New("wallet: encrypted wallet requires a password provider")
+		return nil, errors.New("wallet: 加密钱包需要密码，请通过 --password 或环境变量 HASH_DIARY_PASSWORD 提供")
 	}
 
 	password, err := passwordProvider.GetPassword()
@@ -431,9 +434,9 @@ func (c *chainedProvider) GetPassword() (string, error) {
 		lastErr = err
 	}
 	if lastErr != nil {
-		return "", fmt.Errorf("wallet: all password providers failed, last error: %w", lastErr)
+		return "", fmt.Errorf("wallet: 加密钱包需要密码，请通过 --password 或环境变量 HASH_DIARY_PASSWORD 提供: %w", lastErr)
 	}
-	return "", errors.New("wallet: no password providers configured")
+	return "", errors.New("wallet: 加密钱包需要密码，请通过 --password 或环境变量 HASH_DIARY_PASSWORD 提供")
 }
 
 // --- Key Import ---
@@ -448,11 +451,11 @@ func ImportFromFile(srcPath string) (*Keypair, error) {
 func ImportFromBase58PrivateKey(b58 string) (*Keypair, error) {
 	decoded, err := base58.Decode(b58)
 	if err != nil {
-		return nil, fmt.Errorf("wallet: failed to decode Base58 private key: %w", err)
+		return nil, fmt.Errorf("wallet: 无效的私钥格式，支持 Base58 编码的 64 字节 Ed25519 私钥: %w", err)
 	}
 
 	if len(decoded) != ed25519.PrivateKeySize {
-		return nil, fmt.Errorf("wallet: invalid private key length: got %d, want %d", len(decoded), ed25519.PrivateKeySize)
+		return nil, fmt.Errorf("wallet: 无效的私钥长度 %d 字节（需要 %d 字节），支持格式：Base58 编码的 Ed25519 私钥或 Solana CLI JSON 文件", len(decoded), ed25519.PrivateKeySize)
 	}
 
 	priv := ed25519.PrivateKey(decoded)

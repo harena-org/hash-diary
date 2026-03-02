@@ -219,7 +219,7 @@ func EncodeMemo(plaintext string, recipientPubKey ed25519.PublicKey, senderPrivK
 
 	// Step 6: Check length.
 	if len(memo) > MaxMemoLen {
-		return "", fmt.Errorf("crypto: EncodeMemo: memo exceeds max length: %d bytes (max %d)", len(memo), MaxMemoLen)
+		return "", fmt.Errorf("crypto: EncodeMemo: 编码后 memo 长度 %d 字节，超过上限 %d 字节。日记原文建议控制在约 344 字节以内", len(memo), MaxMemoLen)
 	}
 
 	return memo, nil

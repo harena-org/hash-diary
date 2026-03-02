@@ -497,8 +497,8 @@ func TestEncodeMemo_ExceedsMaxLength(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for memo exceeding 512 bytes, got nil")
 	}
-	if !strings.Contains(err.Error(), "exceeds max length") {
-		t.Errorf("error should mention exceeds max length, got: %v", err)
+	if !strings.Contains(err.Error(), "超过上限") {
+		t.Errorf("error should mention 超过上限, got: %v", err)
 	}
 }
 
@@ -588,5 +588,162 @@ func TestConstants(t *testing.T) {
 	}
 	if MaxMemoLen != 512 {
 		t.Errorf("MaxMemoLen should be 512, got %d", MaxMemoLen)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Boundary and Edge Case Tests
+// ---------------------------------------------------------------------------
+
+func TestEncodeMemo_MaxBoundary(t *testing.T) {
+	// Find the maximum plaintext length that still fits in 512 bytes.
+	// Binary search for the boundary.
+	pub, priv := generateTestKeypair(t)
+
+	// A short compressible text should succeed.
+	short := strings.Repeat("a", 100)
+	_, err := EncodeMemo(short, pub, priv)
+	if err != nil {
+		t.Fatalf("EncodeMemo with 100 repeating chars should succeed: %v", err)
+	}
+
+	// A text just under the limit should succeed (compressible text can be long).
+	// 340 bytes of compressible text should be fine.
+	medium := strings.Repeat("ab", 170)
+	memo, err := EncodeMemo(medium, pub, priv)
+	if err != nil {
+		t.Fatalf("EncodeMemo with 340 bytes of compressible text should succeed: %v", err)
+	}
+	if len(memo) > MaxMemoLen {
+		t.Errorf("encoded memo length %d exceeds MaxMemoLen %d", len(memo), MaxMemoLen)
+	}
+}
+
+func TestEncodeMemo_ExceedsMaxLength_ErrorMessage(t *testing.T) {
+	pub, priv := generateTestKeypair(t)
+
+	// Random data that won't compress.
+	randomBytes := make([]byte, 400)
+	_, _ = rand.Read(randomBytes)
+	longText := base64.StdEncoding.EncodeToString(randomBytes)
+
+	_, err := EncodeMemo(longText, pub, priv)
+	if err == nil {
+		t.Fatal("expected error for memo exceeding 512 bytes, got nil")
+	}
+	// Check that error message includes the current size and the ~344 byte hint.
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "超过上限") {
+		t.Errorf("error should mention 超过上限, got: %v", err)
+	}
+	if !strings.Contains(errMsg, "344") {
+		t.Errorf("error should mention ~344 byte limit, got: %v", err)
+	}
+}
+
+func TestEncodeMemoDecodeMemo_Emoji(t *testing.T) {
+	pub, priv := generateTestKeypair(t)
+
+	plaintext := "Today was great! \U0001F60A\U0001F389\U0001F31F\U0001F680\U0001F4DD"
+
+	memo, err := EncodeMemo(plaintext, pub, priv)
+	if err != nil {
+		t.Fatalf("EncodeMemo (emoji) failed: %v", err)
+	}
+
+	decoded, err := DecodeMemo(memo, pub, priv)
+	if err != nil {
+		t.Fatalf("DecodeMemo (emoji) failed: %v", err)
+	}
+
+	if decoded != plaintext {
+		t.Errorf("emoji round-trip mismatch:\n  got:  %q\n  want: %q", decoded, plaintext)
+	}
+}
+
+func TestEncodeMemoDecodeMemo_Newlines(t *testing.T) {
+	pub, priv := generateTestKeypair(t)
+
+	plaintext := "Line 1\nLine 2\nLine 3\n\nParagraph 2"
+
+	memo, err := EncodeMemo(plaintext, pub, priv)
+	if err != nil {
+		t.Fatalf("EncodeMemo (newlines) failed: %v", err)
+	}
+
+	decoded, err := DecodeMemo(memo, pub, priv)
+	if err != nil {
+		t.Fatalf("DecodeMemo (newlines) failed: %v", err)
+	}
+
+	if decoded != plaintext {
+		t.Errorf("newlines round-trip mismatch:\n  got:  %q\n  want: %q", decoded, plaintext)
+	}
+}
+
+func TestEncodeMemoDecodeMemo_SpecialChars(t *testing.T) {
+	pub, priv := generateTestKeypair(t)
+
+	plaintext := "Special chars: \t\r\n\"'\\/<>{}[]|&^%$#@!~`"
+
+	memo, err := EncodeMemo(plaintext, pub, priv)
+	if err != nil {
+		t.Fatalf("EncodeMemo (special chars) failed: %v", err)
+	}
+
+	decoded, err := DecodeMemo(memo, pub, priv)
+	if err != nil {
+		t.Fatalf("DecodeMemo (special chars) failed: %v", err)
+	}
+
+	if decoded != plaintext {
+		t.Errorf("special chars round-trip mismatch:\n  got:  %q\n  want: %q", decoded, plaintext)
+	}
+}
+
+func TestEncodeMemoDecodeMemo_NullByte(t *testing.T) {
+	pub, priv := generateTestKeypair(t)
+
+	plaintext := "before\x00after"
+
+	memo, err := EncodeMemo(plaintext, pub, priv)
+	if err != nil {
+		t.Fatalf("EncodeMemo (null byte) failed: %v", err)
+	}
+
+	decoded, err := DecodeMemo(memo, pub, priv)
+	if err != nil {
+		t.Fatalf("DecodeMemo (null byte) failed: %v", err)
+	}
+
+	if decoded != plaintext {
+		t.Errorf("null byte round-trip mismatch:\n  got:  %q\n  want: %q", decoded, plaintext)
+	}
+}
+
+func TestEncodeMemoDecodeMemo_SingleChar(t *testing.T) {
+	pub, priv := generateTestKeypair(t)
+
+	plaintext := "a"
+
+	memo, err := EncodeMemo(plaintext, pub, priv)
+	if err != nil {
+		t.Fatalf("EncodeMemo (single char) failed: %v", err)
+	}
+
+	decoded, err := DecodeMemo(memo, pub, priv)
+	if err != nil {
+		t.Fatalf("DecodeMemo (single char) failed: %v", err)
+	}
+
+	if decoded != plaintext {
+		t.Errorf("single char round-trip mismatch:\n  got:  %q\n  want: %q", decoded, plaintext)
+	}
+}
+
+func TestDecompress_EmptyInput(t *testing.T) {
+	_, err := Decompress([]byte{})
+	if err == nil {
+		t.Fatal("expected error for empty input to Decompress")
 	}
 }

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -532,6 +533,98 @@ func TestWithLock_SaveAndLoad(t *testing.T) {
 	}
 	if loaded.Wallets["w1"].Entries[0].Content != "locked write" {
 		t.Error("data not persisted through locked operations")
+	}
+}
+
+// ---------- Concurrent access test ----------
+
+func TestWithLock_ConcurrentAccess(t *testing.T) {
+	store, _ := newTempStore(t)
+
+	// Initialize the cache file.
+	initial := emptyCacheData()
+	initial.Wallets["counter"] = &WalletCache{
+		LastSignature: "init",
+		Entries:       []Entry{},
+	}
+	if err := store.Save(initial); err != nil {
+		t.Fatalf("Save(initial) error: %v", err)
+	}
+
+	// Launch multiple goroutines that each read, modify, and write.
+	const goroutines = 10
+	const incrementsPerGoroutine = 5
+	done := make(chan error, goroutines)
+
+	for g := 0; g < goroutines; g++ {
+		go func(id int) {
+			for i := 0; i < incrementsPerGoroutine; i++ {
+				err := store.WithLock(func() error {
+					data, err := store.Load()
+					if err != nil {
+						return err
+					}
+					wc := data.Wallets["counter"]
+					if wc == nil {
+						wc = &WalletCache{Entries: []Entry{}}
+						data.Wallets["counter"] = wc
+					}
+					wc.Entries = append(wc.Entries, Entry{
+						Sig:     fmt.Sprintf("g%d-i%d", id, i),
+						Ts:      int64(id*100 + i),
+						Content: fmt.Sprintf("entry from goroutine %d iteration %d", id, i),
+					})
+					return store.Save(data)
+				})
+				if err != nil {
+					done <- err
+					return
+				}
+			}
+			done <- nil
+		}(g)
+	}
+
+	// Wait for all goroutines.
+	for i := 0; i < goroutines; i++ {
+		if err := <-done; err != nil {
+			t.Fatalf("goroutine error: %v", err)
+		}
+	}
+
+	// Verify final state: should have exactly goroutines * incrementsPerGoroutine entries.
+	final, err := store.Load()
+	if err != nil {
+		t.Fatalf("final Load() error: %v", err)
+	}
+	wc := final.Wallets["counter"]
+	if wc == nil {
+		t.Fatal("counter wallet cache is nil after concurrent writes")
+	}
+	expectedEntries := goroutines * incrementsPerGoroutine
+	if len(wc.Entries) != expectedEntries {
+		t.Errorf("expected %d entries after concurrent writes, got %d", expectedEntries, len(wc.Entries))
+	}
+}
+
+// ---------- AppendEntries with nil entries ----------
+
+func TestAppendEntries_NilEntries(t *testing.T) {
+	data := emptyCacheData()
+	data.Wallets["w1"] = &WalletCache{
+		LastSignature: "old",
+		Entries:       []Entry{{Sig: "s0", Ts: 50, Content: "existing"}},
+	}
+
+	// Append nil entries (happens when no diary entries found but signature needs updating).
+	AppendEntries(data, "w1", nil, "new-sig")
+
+	wc := data.Wallets["w1"]
+	if len(wc.Entries) != 1 {
+		t.Errorf("Entries length = %d, want 1 (nil append should not change entries)", len(wc.Entries))
+	}
+	if wc.LastSignature != "new-sig" {
+		t.Errorf("LastSignature = %q, want %q", wc.LastSignature, "new-sig")
 	}
 }
 

@@ -2,7 +2,6 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/hash-diary/hash-diary/internal/output"
@@ -32,6 +31,11 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagFormat, "format", "text", "Output format: text | json")
 	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false, "Show detailed logs")
 
+	// Prevent cobra from printing errors itself; we handle them in Execute()
+	// so we can respect the --format flag (json errors as {"error":"..."}).
+	rootCmd.SilenceErrors = true
+	rootCmd.SilenceUsage = true
+
 	// Register subcommands.
 	rootCmd.AddCommand(newWalletCmd())
 	rootCmd.AddCommand(newWriteCmd())
@@ -42,7 +46,8 @@ func init() {
 // Execute runs the root command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		f := newFormatter()
+		f.Error(err)
 		os.Exit(1)
 	}
 }
