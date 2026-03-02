@@ -43,10 +43,13 @@ hash-diary wallet new
 # 2. 领取 devnet 测试代币
 hash-diary wallet airdrop
 
-# 3. 写入日记
+# 3. 查看钱包余额
+hash-diary wallet show
+
+# 4. 写入日记
 hash-diary write "今天天气很好"
 
-# 4. 读取日记
+# 5. 读取日记
 hash-diary read
 ```
 
