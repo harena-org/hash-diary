@@ -52,19 +52,27 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 **流程**:
 1. 检查目标路径是否已存在密钥文件
 2. 若已存在，提示用户确认是否覆盖（`--force` 可跳过确认）
-3. 生成新的 Ed25519 密钥对
-4. 将密钥对保存为 JSON 格式文件
-5. 输出新钱包的公钥地址
+3. 提示用户输入密码（可选，允许为空，直接回车跳过）
+4. 生成新的 Ed25519 密钥对
+5. 若设置了密码，使用密码加密密钥后保存；否则以明文 JSON 格式保存
+6. 输出新钱包的公钥地址
+
+**密码说明**:
+- 密码为可选项，允许为空（直接回车跳过）
+- 设置密码后，密钥文件将以加密形式存储，每次使用钱包时需输入密码解锁
+- 不设置密码时，密钥文件以明文 JSON 格式保存，使用时无需输入密码
 
 **命令示例**:
 ```bash
 hash-diary wallet new
 hash-diary wallet new --keypair ./my-wallet.json
 hash-diary wallet new --force
+hash-diary wallet new --no-password
 ```
 
 **输出示例**:
 ```
+请输入钱包密码（可选，直接回车跳过）:
 钱包已创建，地址: 7xKX...3nPq
 密钥文件已保存至: ~/.hash-diary/id.json
 ```
@@ -104,16 +112,18 @@ hash-diary wallet airdrop --amount 2
 
 #### `wallet import` — 导入已有钱包
 
-从已有的密钥文件或私钥导入钱包。
+从已有的密钥文件或私钥导入钱包。导入时同样支持设置可选密码。
 
 **命令示例**:
 ```bash
 hash-diary wallet import /path/to/existing-keypair.json
 hash-diary wallet import --private-key <base58-private-key>
+hash-diary wallet import --private-key <base58-private-key> --no-password
 ```
 
 **输出示例**:
 ```
+请输入钱包密码（可选，直接回车跳过）:
 钱包已导入，地址: 9aBC...xY2z
 密钥文件已保存至: ~/.hash-diary/id.json
 ```
@@ -246,6 +256,7 @@ wallet 子命令:
 
 wallet 选项:
   --force            覆盖已有密钥文件（wallet new）
+  --no-password      跳过密码设置，不加密密钥文件（wallet new / wallet import）
   --amount <n>       领取代币数量，默认 1 SOL（wallet airdrop）
   --private-key <k>  通过 Base58 私钥导入（wallet import）
 
