@@ -634,7 +634,7 @@ func TestGetTransaction_Success(t *testing.T) {
 				Meta: &solanarpc.TransactionMeta{
 					LogMessages: []string{
 						"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr invoke [1]",
-						"Program log: Memo (len 11): Hello World",
+						`Program log: Memo (len 11): "Hello World"`,
 						"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr consumed 12345 of 200000 compute units",
 						"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr success",
 					},
@@ -677,21 +677,28 @@ func TestTransactionResult_ExtractMemoData(t *testing.T) {
 		want        []string
 	}{
 		{
-			name: "standard memo log",
+			name: "standard memo log with quotes",
 			logMessages: []string{
 				"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr invoke [1]",
-				"Program log: Memo (len 11): Hello World",
+				`Program log: Memo (len 11): "Hello World"`,
 				"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr success",
 			},
 			want: []string{"Hello World"},
 		},
 		{
-			name: "multiple memos",
+			name: "multiple memos with quotes",
 			logMessages: []string{
-				"Program log: Memo (len 5): First",
-				"Program log: Memo (len 6): Second",
+				`Program log: Memo (len 5): "First"`,
+				`Program log: Memo (len 6): "Second"`,
 			},
 			want: []string{"First", "Second"},
+		},
+		{
+			name: "memo without quotes (backwards compat)",
+			logMessages: []string{
+				"Program log: Memo (len 5): First",
+			},
+			want: []string{"First"},
 		},
 		{
 			name: "no memo",
@@ -707,9 +714,9 @@ func TestTransactionResult_ExtractMemoData(t *testing.T) {
 			want:        nil,
 		},
 		{
-			name: "memo with HD prefix",
+			name: "memo with HD prefix and quotes",
 			logMessages: []string{
-				"Program log: Memo (len 30): HD:SGVsbG8gV29ybGQ=",
+				`Program log: Memo (len 30): "HD:SGVsbG8gV29ybGQ="`,
 			},
 			want: []string{"HD:SGVsbG8gV29ybGQ="},
 		},

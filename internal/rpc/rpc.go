@@ -80,21 +80,26 @@ type TransactionResult struct {
 }
 
 // ExtractMemoData searches the log messages for Memo program data.
-// Memo program logs have the format: "Program log: Memo (len N): <data>"
-// or simply the data logged via the memo program.
+// The Solana Memo program (v2) logs in the format:
+//
+//	Program log: Memo (len N): "data"
+//
+// Note: the data is wrapped in double quotes by the program's Rust {:?} formatter.
 func (tr *TransactionResult) ExtractMemoData() []string {
 	if tr == nil {
 		return nil
 	}
 	var memos []string
 	for _, log := range tr.LogMessages {
-		// The Memo program logs data in the format:
-		// "Program log: Memo (len <N>): <data>"
 		if strings.Contains(log, "Memo (len") {
-			// Extract the data after the last ": "
 			idx := strings.LastIndex(log, "): ")
 			if idx >= 0 {
-				memos = append(memos, log[idx+3:])
+				data := log[idx+3:]
+				// Strip surrounding double quotes added by the Memo program's
+				// Rust {:?} debug formatter.
+				data = strings.TrimPrefix(data, "\"")
+				data = strings.TrimSuffix(data, "\"")
+				memos = append(memos, data)
 			}
 		}
 	}
