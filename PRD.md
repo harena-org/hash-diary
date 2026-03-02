@@ -70,11 +70,16 @@ hash-diary wallet new --force
 hash-diary wallet new --no-password
 ```
 
-**输出示例**:
+**输出示例 (text)**:
 ```
 请输入钱包密码（可选，直接回车跳过）:
 钱包已创建，地址: 7xKX...3nPq
 密钥文件已保存至: ~/.hash-diary/id.json
+```
+
+**输出示例 (json)**:
+```json
+{"address": "7xKX...3nPq", "keypair": "~/.hash-diary/id.json"}
 ```
 
 #### `wallet show` — 查看钱包信息
@@ -88,11 +93,16 @@ hash-diary wallet show -u https://api.mainnet-beta.solana.com
 hash-diary wallet show --keypair ./my-wallet.json
 ```
 
-**输出示例**:
+**输出示例 (text)**:
 ```
 地址: 7xKX...3nPq
 余额: 1.5 SOL
 网络: devnet
+```
+
+**输出示例 (json)**:
+```json
+{"address": "7xKX...3nPq", "balance": 1.5, "network": "devnet"}
 ```
 
 #### `wallet airdrop` — 领取测试代币
@@ -105,9 +115,14 @@ hash-diary wallet airdrop
 hash-diary wallet airdrop --amount 2
 ```
 
-**输出示例**:
+**输出示例 (text)**:
 ```
 已领取 1 SOL，当前余额: 2.5 SOL
+```
+
+**输出示例 (json)**:
+```json
+{"airdrop": 1, "balance": 2.5}
 ```
 
 #### `wallet import` — 导入已有钱包
@@ -121,11 +136,16 @@ hash-diary wallet import --private-key <base58-private-key>
 hash-diary wallet import --private-key <base58-private-key> --no-password
 ```
 
-**输出示例**:
+**输出示例 (text)**:
 ```
 请输入钱包密码（可选，直接回车跳过）:
 钱包已导入，地址: 9aBC...xY2z
 密钥文件已保存至: ~/.hash-diary/id.json
+```
+
+**输出示例 (json)**:
+```json
+{"address": "9aBC...xY2z", "keypair": "~/.hash-diary/id.json"}
 ```
 
 ### 4.4 写入子命令 (write)
@@ -148,9 +168,14 @@ hash-diary write "Hello World" -u https://api.mainnet-beta.solana.com
 hash-diary write "日记内容" --keypair ./my-wallet.json
 ```
 
-**输出示例**:
+**输出示例 (text)**:
 ```
 交易已发送，签名: 5UfD...xK3m
+```
+
+**输出示例 (json)**:
+```json
+{"signature": "5UfD...xK3m"}
 ```
 
 ### 4.5 读取子命令 (read)
@@ -172,10 +197,18 @@ hash-diary read --limit 10
 hash-diary read --since 2026-02-01
 ```
 
-**输出示例**:
+**输出示例 (text)**:
 ```
 [2026-03-01 10:30:00] 今天天气很好
 [2026-03-01 08:15:00] Hello World
+```
+
+**输出示例 (json)**:
+```json
+[
+  {"timestamp": "2026-03-01 10:30:00", "content": "今天天气很好"},
+  {"timestamp": "2026-03-01 08:15:00", "content": "Hello World"}
+]
 ```
 
 ### 4.6 内容约束
@@ -245,6 +278,7 @@ hash-diary <subcommand> [options]
 全局选项:
   -u, --url <rpc>    指定 Solana RPC 端点 URL (默认: https://api.devnet.solana.com)
   --keypair <path>   指定钱包密钥文件路径 (默认: ~/.hash-diary/id.json)
+  --format <fmt>     输出格式: text | json (默认: text)
   --help             显示帮助信息
   --version          显示版本号
 
@@ -297,5 +331,6 @@ read 选项:
 
 - 交易发送后需等待确认（至少 confirmed 级别）再返回结果
 - read 命令应按时间倒序展示记录，默认返回最近 7 条
+- CLI 默认输出格式为 text（人类可读），可通过 `--format json` 切换为 JSON 格式（方便程序解析）
 - CLI 输出应简洁友好，支持中英文内容
 - MCP Server 模式下所有输出必须为 JSON-RPC 格式，不得输出人类可读的提示信息到 stdout
