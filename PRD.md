@@ -166,6 +166,11 @@ hash-diary wallet import --private-key <base58-private-key> --no-password
 8. 签名并发送交易，默认等待交易达到 `confirmed` 状态
 9. 返回交易签名（Transaction Signature）供用户查询
 
+**失败与重试**:
+- 构建交易失败：直接返回错误，不进行重试
+- 发送失败：最多重试 3 次，退避间隔 500ms / 1s / 2s
+- 确认超时：等待确认最长 60 秒，超时仍返回签名并提示状态为 `timeout`
+
 **输入方式**:
 - 命令行参数：`hash-diary write "日记内容"`
 - 标准输入：`echo "日记内容" | hash-diary write`  或  `hash-diary write < file.txt`
@@ -190,6 +195,7 @@ echo "通过管道写入" | hash-diary write
 ```json
 {"signature": "5UfD...xK3m"}
 ```
+确认超时返回 `{"signature": "...", "status": "timeout"}`。
 
 ### 4.4 读取子命令 (read)
 
@@ -202,6 +208,15 @@ echo "通过管道写入" | hash-diary write
 4. 对新数据进行 Base64 解码 -> NaCl 解密 -> Zlib 解压
 5. 将新解密的日记追加到本地缓存中
 6. 根据用户查询条件（时间、关键词等）过滤并展示日记内容
+
+**分页语义**:
+- `--before <sig>` 返回严格早于该签名的记录
+- 默认按时间倒序返回
+- 返回条数等于 limit 时显示分页提示
+
+**异常处理**:
+- Base64 解码、NaCl 解密、Zlib 解压失败的记录直接跳过，仅在 `--verbose` 中提示
+- 交易 `blockTime` 为空时跳过该记录，确保输出时间戳来源可信
 
 **命令示例**:
 ```bash
@@ -233,6 +248,7 @@ hash-diary read --force-refresh      # 强制全量拉取（忽略缓存）
 
 - **仅支持文本**: 不支持图片、文件等非文本内容
 - **大小限制**: Memo 最大 512 字节。扣除前缀 `HD:` 和加密开销，Zlib 压缩后的数据上限约 340 字节（对应明文约 500-800 字符）
+- **大小估算**: 计算方式为 `len("HD:") + base64(ciphertext)`，Base64 长度约为 `ceil(n/3)*4`，其中 `n = 压缩后明文长度 + 40`（nonce + MAC）
 - **加密方式**: Ed25519 → X25519 密钥转换 + NaCl box (Curve25519-XSalsa20-Poly1305)
 - **数据压缩**: 使用 Zlib 算法压缩明文数据
 - **加密开销**: 24 字节随机 nonce + 16 字节 Poly1305 MAC = 40 字节（nonce 必须每次随机生成，不可复用）
@@ -282,6 +298,17 @@ HASH_DIARY_PASSWORD=<password> hash-diary mcp
 
 返回值：日记条目数组，每条包含 `timestamp`、`content` 和 `signature` 字段。
 
+**JSON-RPC 响应规范**:
+- 成功:
+```json
+{"jsonrpc": "2.0", "id": 1, "result": {"signature": "5UfD...xK3m"}}
+```
+- 失败:
+```json
+{"jsonrpc": "2.0", "id": 1, "error": {"code": -32001, "message": "wallet locked"}}
+```
+- 错误码范围：使用 JSON-RPC 标准错误码，业务错误码范围 `-32000` 到 `-32099`
+
 **AI Agent 集成配置示例** (OpenClaw `~/.openclaw/workspace/skills/hash-diary/SKILL.md` 或 MCP 配置):
 ```json
 {
@@ -305,6 +332,7 @@ HASH_DIARY_PASSWORD=<password> hash-diary mcp
 - **缓存结构**:
   ```json
   {
+    "cache_version": 1,
     "wallet_address": {
       "last_signature": "5UfD...xK3m", // 最新已同步的交易签名
       "entries": [
@@ -319,6 +347,7 @@ HASH_DIARY_PASSWORD=<password> hash-diary mcp
   - 解密新交易并追加到缓存。
   - 若用户指定 `--force-refresh`，则忽略 `last_signature` 全量拉取并重建缓存。
 - **并发控制**: 读写缓存文件时必须使用文件锁（File Lock），防止多终端并发操作导致数据损坏。
+- **迁移与损坏处理**: 若 `cache_version` 不匹配或 JSON 解析失败，先将旧文件备份为 `cache.json.bak`，然后全量拉取重建缓存
 - **安全性**: 缓存文件存储的是明文日记内容，因此必须确保 `~/.hash-diary/` 目录及 `cache.json` 仅当前用户可读写 (chmod 600)。**警告：若本地环境被入侵，攻击者可直接读取缓存中的所有日记内容。**
 
 ## 5. 命令行接口设计
@@ -396,6 +425,9 @@ read 选项:
 | write 未提供文本且无 stdin 输入 | 报错提示，告知需通过命令行参数或 stdin 提供日记内容 |
 | 无历史记录 | 提示暂无日记记录 |
 | MCP 协议错误 | 返回标准 MCP error response，包含错误码和描述 |
+| 交易确认超时 | 返回签名并提示状态为 timeout |
+| 解码或解密失败 | 跳过该记录并提示在 `--verbose` |
+| RPC 限流或超时 | 提示重试并建议更换 RPC 端点 |
 
 ## 8. 非功能需求
 
@@ -409,3 +441,4 @@ read 选项:
 - MCP Server 模式下所有输出必须为 JSON-RPC 格式，不得输出人类可读的提示信息到 stdout
 - **费用说明**: 每条日记仅消耗 Solana 基础交易费（5000 lamports = 0.000005 SOL），在当前币价下几乎可忽略不计。
 - **缓存安全**: 缓存文件应使用严格的文件权限（600/700），避免被其他用户读取。
+- **RPC 兼容性**: 遇到限流或返回不完整数据时应退避重试，并允许用户切换 RPC
