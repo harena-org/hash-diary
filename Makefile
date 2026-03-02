@@ -1,17 +1,20 @@
 BINARY_NAME := hash-diary
 GO := go
-GOFLAGS := -v
 INSTALL_DIR := $(GOPATH)/bin
 
-.PHONY: build test lint install clean
+.PHONY: build test test-verbose lint install clean
 
 ## build: Compile the binary
 build:
-	$(GO) build $(GOFLAGS) -o $(BINARY_NAME) .
+	$(GO) build -o $(BINARY_NAME) .
 
-## test: Run all tests
+## test: Run all tests with race detector
 test:
-	$(GO) test $(GOFLAGS) ./...
+	$(GO) test -race ./...
+
+## test-verbose: Run all tests with verbose output and race detector
+test-verbose:
+	$(GO) test -v -race ./...
 
 ## lint: Run go vet
 lint:
@@ -19,7 +22,7 @@ lint:
 
 ## install: Install the binary to GOPATH/bin
 install:
-	$(GO) install $(GOFLAGS) .
+	$(GO) install .
 
 ## clean: Remove build artifacts
 clean:
