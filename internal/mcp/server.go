@@ -23,6 +23,24 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 )
 
+// Business error codes for MCP error responses.
+// These codes follow the JSON-RPC standard error code range for server errors
+// (-32000 to -32099). The mcp-go SDK handles JSON-RPC framing automatically,
+// so these codes are embedded in tool-level error messages for structured
+// error reporting.
+const (
+	ErrCodeWalletLocked        = -32001 // Wallet locked / cannot decrypt
+	ErrCodeContentTooLarge     = -32002 // Content exceeds 512-byte memo limit
+	ErrCodeInsufficientBalance = -32003 // Insufficient SOL balance
+	ErrCodeNetworkError        = -32004 // Network/RPC error
+)
+
+// toolError creates a CallToolResult with a structured error message
+// containing the business error code prefix.
+func toolError(code int, msg string) *gomcp.CallToolResult {
+	return gomcp.NewToolResultError(fmt.Sprintf("[%d] %s", code, msg))
+}
+
 // Server is the MCP server for HashDiary.
 type Server struct {
 	keypair  *wallet.Keypair
@@ -79,6 +97,9 @@ func (s *Server) handleDiaryWrite(ctx context.Context, request gomcp.CallToolReq
 	// Encode memo (compress + encrypt + base64 + prefix).
 	encodedMemo, err := crypto.EncodeMemo(text, s.keypair.PublicKey, s.keypair.PrivateKey)
 	if err != nil {
+		if strings.Contains(err.Error(), "memo") && strings.Contains(err.Error(), "超过上限") {
+			return toolError(ErrCodeContentTooLarge, fmt.Sprintf("failed to encode memo: %s", err)), nil
+		}
 		return gomcp.NewToolResultError(fmt.Sprintf("failed to encode memo: %s", err)), nil
 	}
 
@@ -86,7 +107,7 @@ func (s *Server) handleDiaryWrite(ctx context.Context, request gomcp.CallToolReq
 	sdkClient := solanarpc.New(s.endpoint)
 	recent, err := sdkClient.GetLatestBlockhash(ctx, solanarpc.CommitmentFinalized)
 	if err != nil {
-		return gomcp.NewToolResultError(fmt.Sprintf("failed to get latest blockhash: %s", err)), nil
+		return toolError(ErrCodeNetworkError, fmt.Sprintf("failed to get latest blockhash: %s", err)), nil
 	}
 
 	memoProgramID := solana.MustPublicKeyFromBase58("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
@@ -125,7 +146,11 @@ func (s *Server) handleDiaryWrite(ctx context.Context, request gomcp.CallToolReq
 	rpcClient := rpc.NewClient(s.endpoint)
 	sig, status, err := rpcClient.SendAndConfirmTransaction(ctx, tx)
 	if err != nil {
-		return gomcp.NewToolResultError(fmt.Sprintf("failed to send transaction: %s", err)), nil
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "insufficient") || strings.Contains(errMsg, "Insufficient") {
+			return toolError(ErrCodeInsufficientBalance, fmt.Sprintf("failed to send transaction: %s", err)), nil
+		}
+		return toolError(ErrCodeNetworkError, fmt.Sprintf("failed to send transaction: %s", err)), nil
 	}
 
 	resultText := fmt.Sprintf("Diary entry written successfully.\nSignature: %s\nStatus: %s", sig, status)
@@ -174,7 +199,7 @@ func (s *Server) handleDiaryRead(ctx context.Context, request gomcp.CallToolRequ
 		return nil
 	})
 	if err != nil {
-		return gomcp.NewToolResultError(fmt.Sprintf("failed to sync entries: %s", err)), nil
+		return toolError(ErrCodeNetworkError, fmt.Sprintf("failed to sync entries: %s", err)), nil
 	}
 
 	// Sort by timestamp descending (newest first).
