@@ -12,9 +12,9 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 |------|------|
 | 链上存储 | 利用 Solana Memo Program 将日记内容附加到交易中，永久存储在区块链上 |
 | 自发自收交易 | 交易的目标地址是当前钱包自身，形成"给自己写信"的模式 |
-| 公钥加密 | 日记内容使用钱包公钥加密后再进行 Base64 编码，仅持有对应私钥的钱包可解密 |
+| NaCl box 加密 | 将 Ed25519 密钥对转换为 X25519 密钥对，使用 NaCl box (Curve25519-XSalsa20-Poly1305) 进行加密，每次加密必须随机生成 24 字节 nonce，仅持有对应私钥的钱包可解密 |
 | Base64 编码 | 加密后的内容在发送前必须进行 Base64 编码 |
-| 512 字节限制 | 单条 Memo 最大 512 字节（加密 + 编码后），超出需截断或拒绝 |
+| 512 字节限制 | 单条 Memo 最大 512 字节（加密 + 编码后）。加密开销 40 字节（24 字节 nonce + 16 字节 MAC），Base64 膨胀约 33%，实际可用明文约 344 字节（约 114 个中文字符） |
 | MCP 协议 | 通过标准化的 MCP Server 暴露工具能力，供 AI Agent 调用 |
 
 ## 3. 目标用户
@@ -35,15 +35,13 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
   - mainnet-beta: `https://api.mainnet-beta.solana.com`
 - 也可指定自定义 RPC 端点（如 Helius、QuickNode 等）
 
-### 4.2 钱包管理
-
-- 读取本地钱包密钥文件，**默认路径 `~/.hash-diary/id.json`**
-- 支持通过参数指定密钥文件路径，例如 `--keypair /path/to/keypair.json`
-- 钱包地址既作为交易发送方，也作为交易接收方（自发自收）
-
-### 4.3 钱包管理子命令 (wallet)
+### 4.2 钱包管理子命令 (wallet)
 
 **功能描述**: 管理 HashDiary 使用的 Solana 钱包，包括创建、查看、导入密钥对。
+
+- 读取本地钱包密钥文件，**默认路径 `~/.hash-diary/id.json`**
+- 支持通过 `--keypair` 参数指定密钥文件路径
+- 钱包地址既作为交易发送方，也作为交易接收方（自发自收）
 
 #### `wallet new` — 创建新钱包
 
@@ -61,6 +59,9 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 - 密码为可选项，允许为空（直接回车跳过）
 - 设置密码后，密钥文件将以加密形式存储，每次使用钱包时需输入密码解锁
 - 不设置密码时，密钥文件以明文 JSON 格式保存，使用时无需输入密码
+- 密钥文件加密方案：使用 scrypt 从密码派生密钥，再通过 AES-256-GCM 加密私钥内容
+- 明文钱包文件格式：兼容 Solana CLI 格式，JSON 数组存储 64 字节密钥对（`[byte_array]`），可与 `solana-keygen` 等工具互操作
+- 加密钱包文件格式：JSON 结构，包含 `address`（明文公钥地址，便于无需密码即可识别钱包）、`encrypted`（Base64 密文）、`nonce`（Base64 AES-GCM nonce）、`salt`（Base64 scrypt salt）、`scrypt`（`{"N": 32768, "r": 8, "p": 1}`）字段
 
 **命令示例**:
 ```bash
@@ -148,24 +149,31 @@ hash-diary wallet import --private-key <base58-private-key> --no-password
 {"address": "9aBC...xY2z", "keypair": "~/.hash-diary/id.json"}
 ```
 
-### 4.4 写入子命令 (write)
+### 4.3 写入子命令 (write)
 
 **功能描述**: 将文本内容作为 Memo 写入 Solana 链上。
 
 **流程**:
-1. 用户输入文本内容
-2. 使用钱包公钥对文本进行加密
-3. 对加密后的内容进行 Base64 编码
-4. 校验编码后大小不超过 512 字节，超出则报错提示
-5. 构建交易：目标地址为当前钱包，附带 Memo 指令
-6. 签名并发送交易
-7. 返回交易签名（Transaction Signature）供用户查询
+1. 用户输入文本内容（通过命令行参数或 stdin）
+2. 将 Ed25519 密钥对转换为 X25519 密钥对
+3. 使用 NaCl box 对文本进行加密
+4. 对加密后的内容进行 Base64 编码
+5. 校验编码后大小不超过 512 字节，超出则报错提示
+6. 构建交易：目标地址为当前钱包，附带 Memo 指令
+7. 签名并发送交易
+8. 返回交易签名（Transaction Signature）供用户查询
+
+**输入方式**:
+- 命令行参数：`hash-diary write "日记内容"`
+- 标准输入：`echo "日记内容" | hash-diary write`  或  `hash-diary write < file.txt`
+- 若同时提供参数和 stdin，优先使用命令行参数
 
 **命令示例**:
 ```bash
 hash-diary write "今天天气很好"
 hash-diary write "Hello World" -u https://api.mainnet-beta.solana.com
 hash-diary write "日记内容" --keypair ./my-wallet.json
+echo "通过管道写入" | hash-diary write
 ```
 
 **输出示例 (text)**:
@@ -178,7 +186,7 @@ hash-diary write "日记内容" --keypair ./my-wallet.json
 {"signature": "5UfD...xK3m"}
 ```
 
-### 4.5 读取子命令 (read)
+### 4.4 读取子命令 (read)
 
 **功能描述**: 查询当前钱包地址的历史 Memo 交易，解码并展示日记内容。
 
@@ -186,7 +194,7 @@ hash-diary write "日记内容" --keypair ./my-wallet.json
 1. 获取当前钱包地址的交易历史
 2. 筛选包含 Memo 指令的交易
 3. 对 Memo 数据进行 Base64 解码
-4. 使用钱包私钥解密内容，解密失败的记录自动忽略（跳过）
+4. 将 Ed25519 密钥对转换为 X25519 密钥对，使用 NaCl box open 解密内容，解密失败的记录自动忽略（跳过）
 5. 展示日记内容列表，包含时间戳和内容
 
 **命令示例**:
@@ -195,37 +203,51 @@ hash-diary read
 hash-diary read -u https://api.mainnet-beta.solana.com
 hash-diary read --limit 10
 hash-diary read --since 2026-02-01
+hash-diary read --before 5UfD...xK3m
 ```
 
 **输出示例 (text)**:
 ```
-[2026-03-01 10:30:00] 今天天气很好
-[2026-03-01 08:15:00] Hello World
+[2026-03-01 18:30:00 CST] 今天天气很好
+[2026-03-01 16:15:00 CST] Hello World
+-- 更多记录: hash-diary read --before 3aBc...yZ9w
 ```
+
+> 分页提示仅当返回条数 = limit 时显示。
 
 **输出示例 (json)**:
 ```json
 [
-  {"timestamp": "2026-03-01 10:30:00", "content": "今天天气很好"},
-  {"timestamp": "2026-03-01 08:15:00", "content": "Hello World"}
+  {"timestamp": "2026-03-01 18:30:00 CST", "content": "今天天气很好", "signature": "5UfD...xK3m"},
+  {"timestamp": "2026-03-01 16:15:00 CST", "content": "Hello World", "signature": "3aBc...yZ9w"}
 ]
 ```
 
-### 4.6 内容约束
+### 4.5 内容约束
 
 - **仅支持文本**: 不支持图片、文件等非文本内容
-- **大小限制**: Memo 最大 512 字节（加密 + Base64 编码后）
-- **加密方式**: 使用钱包公钥加密，确保链上数据仅钱包持有者可读
-- **编码方式**: 加密后统一使用 Base64 编码
+- **大小限制**: Memo 最大 512 字节（加密 + Base64 编码后），实际可用明文约 344 字节
+- **加密方式**: Ed25519 → X25519 密钥转换 + NaCl box (Curve25519-XSalsa20-Poly1305)
+- **加密开销**: 24 字节随机 nonce + 16 字节 Poly1305 MAC = 40 字节（nonce 必须每次随机生成，不可复用）
+- **编码方式**: 加密后统一使用 Standard Base64 编码（RFC 4648，膨胀约 33%）
 
-### 4.7 MCP Server 模式
+### 4.6 MCP Server 模式
 
 **功能描述**: 以 MCP Server 运行，通过 stdio 传输向 AI Agent 暴露日记读写工具。
+
+**密码处理**: MCP 模式通过 stdio 通信，无法交互输入密码。若使用加密钱包文件，需通过以下方式提供密码：
+- 环境变量 `HASH_DIARY_PASSWORD`（推荐，避免进程列表泄露密码）
+- 启动参数 `--password <password>`（注意：命令行参数在 `ps` 进程列表中明文可见）
+- 密码优先级：`--password` > `HASH_DIARY_PASSWORD` > 交互输入
+- 若加密钱包未提供密码，启动时报错退出
+- 无密码钱包可直接使用
 
 **启动方式**:
 ```bash
 hash-diary mcp
 hash-diary mcp -u https://api.mainnet-beta.solana.com
+hash-diary mcp --password <password>
+HASH_DIARY_PASSWORD=<password> hash-diary mcp
 ```
 
 **暴露的 MCP Tools**:
@@ -248,8 +270,9 @@ hash-diary mcp -u https://api.mainnet-beta.solana.com
 |------|------|------|------|
 | limit | number | 否 | 返回记录数量，默认 7 |
 | since | string | 否 | 起始日期过滤，格式 YYYY-MM-DD |
+| before | string | 否 | 游标分页，返回指定交易签名之前的记录 |
 
-返回值：日记条目数组，每条包含 `timestamp` 和 `content` 字段。
+返回值：日记条目数组，每条包含 `timestamp`、`content` 和 `signature` 字段。
 
 **AI Agent 集成配置示例** (OpenClaw `~/.openclaw/workspace/skills/hash-diary/SKILL.md` 或 MCP 配置):
 ```json
@@ -258,7 +281,9 @@ hash-diary mcp -u https://api.mainnet-beta.solana.com
     "hash-diary": {
       "command": "hash-diary",
       "args": ["mcp"],
-      "env": {}
+      "env": {
+        "HASH_DIARY_PASSWORD": "your-password-if-needed"
+      }
     }
   }
 }
@@ -271,13 +296,14 @@ hash-diary <subcommand> [options]
 
 子命令:
   wallet             钱包管理
-  write <text>       将文本写入链上
+  write [text]       将文本写入链上（可通过参数或 stdin 输入）
   read               读取链上日记记录
   mcp                以 MCP Server 模式运行
 
 全局选项:
   -u, --url <rpc>    指定 Solana RPC 端点 URL (默认: https://api.devnet.solana.com)
   --keypair <path>   指定钱包密钥文件路径 (默认: ~/.hash-diary/id.json)
+  --password <pwd>   解锁加密钱包的密码（优先级：--password > HASH_DIARY_PASSWORD 环境变量 > 交互输入）
   --format <fmt>     输出格式: text | json (默认: text)
   --help             显示帮助信息
   --version          显示版本号
@@ -296,18 +322,21 @@ wallet 选项:
 
 read 选项:
   --limit <n>        限制返回记录数量 (默认: 7)
-  --since <date>     起始日期过滤，格式 YYYY-MM-DD
+  --since <date>     起始日期过滤，格式 YYYY-MM-DD（按本地时区）
+  --before <sig>     游标分页，返回指定交易签名之前的记录
 ```
 
 ## 6. 技术要求
 
 | 项目 | 说明 |
 |------|------|
+| 语言 | Go |
 | 区块链 | Solana |
 | 链上程序 | Memo Program (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`) |
-| 内容加密 | 钱包公钥加密 |
-| 编码格式 | Base64 |
-| 单条上限 | 512 字节 (加密 + 编码后) |
+| 日记加密 | Ed25519 → X25519 密钥转换 + NaCl box (Curve25519-XSalsa20-Poly1305) |
+| 密钥文件加密 | scrypt 密码派生 + AES-256-GCM |
+| 编码格式 | Standard Base64 (RFC 4648) |
+| 单条上限 | 512 字节 (加密 + 编码后)，明文约 344 字节 |
 | 交易模式 | 自发自收 (目标地址 = 当前钱包地址) |
 | 工具形态 | 命令行 CLI + MCP Server |
 | 钱包路径 | `~/.hash-diary/id.json` |
@@ -317,13 +346,17 @@ read 选项:
 
 | 场景 | 处理方式 |
 |------|----------|
-| 内容超过 512 字节 | 报错提示，拒绝发送 |
+| 内容超过 512 字节 | 报错提示，告知当前大小及明文上限（约 344 字节），拒绝发送 |
 | 钱包文件不存在 | 报错提示，引导用户执行 `wallet new` 创建或指定路径 |
 | 钱包文件已存在（wallet new） | 提示确认覆盖，或使用 `--force` 跳过确认 |
+| 钱包密码错误 | 报错提示，告知密码不正确，无法解锁密钥文件 |
+| 加密钱包未提供密码 | 报错提示，告知需通过 `--password` 参数或 `HASH_DIARY_PASSWORD` 环境变量提供密码 |
+| MCP 模式下加密钱包未提供密码 | 启动时报错退出，提示通过环境变量或 `--password` 参数提供密码 |
 | 在 mainnet 上执行 airdrop | 报错提示，airdrop 仅支持 devnet/testnet |
 | 导入的私钥格式无效 | 报错提示，告知支持的格式 |
 | 余额不足 | 报错提示，告知当前余额和所需费用 |
 | 网络连接失败 | 报错提示，建议检查网络或 RPC 端点 |
+| write 未提供文本且无 stdin 输入 | 报错提示，告知需通过命令行参数或 stdin 提供日记内容 |
 | 无历史记录 | 提示暂无日记记录 |
 | MCP 协议错误 | 返回标准 MCP error response，包含错误码和描述 |
 
@@ -332,5 +365,8 @@ read 选项:
 - 交易发送后需等待确认（至少 confirmed 级别）再返回结果
 - read 命令应按时间倒序展示记录，默认返回最近 7 条
 - CLI 默认输出格式为 text（人类可读），可通过 `--format json` 切换为 JSON 格式（方便程序解析）
+- `--format json` 模式下错误输出统一为 `{"error": "<错误描述>"}` 到 stdout，并以非零退出码退出
+- 时间戳自动获取当前终端时区，转换为本地时间显示，格式为 `YYYY-MM-DD HH:MM:SS TZ`（如 `2026-03-01 18:30:00 CST`）；`--since` 参数按本地时区日期过滤
+- 所有交互提示（密码输入、覆盖确认等）必须输出到 stderr，保持 stdout 干净，确保 `--format json` 和管道场景正常工作
 - CLI 输出应简洁友好，支持中英文内容
 - MCP Server 模式下所有输出必须为 JSON-RPC 格式，不得输出人类可读的提示信息到 stdout
