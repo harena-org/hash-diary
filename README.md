@@ -6,6 +6,8 @@
 
 每条日记的链上交易费用固定为 **0.000005 SOL**（约 5000 lamports）。在 devnet 上使用时，SOL 可通过 `wallet airdrop` 免费领取，无需任何花费。
 
+![HashDiary 架构图](docs/HashDiary.png)
+
 ## 功能特性
 
 - **人机双模式** -- CLI 供人类终端使用，MCP Server 供 AI Agent (Claude Desktop / Cursor / OpenClaw) 调用，数据完全互通
