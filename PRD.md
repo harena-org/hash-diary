@@ -163,8 +163,8 @@ hash-diary wallet import --private-key <base58-private-key> --no-password
 5. 对加密后的内容进行 Base64 编码，并添加前缀 `HD:`
 6. 校验编码后大小不超过 512 字节，超出则报错提示
 7. 构建交易：目标地址为当前钱包，附带 Memo 指令
-7. 签名并发送交易
-8. 返回交易签名（Transaction Signature）供用户查询
+8. 签名并发送交易，默认等待交易达到 `confirmed` 状态
+9. 返回交易签名（Transaction Signature）供用户查询
 
 **输入方式**:
 - 命令行参数：`hash-diary write "日记内容"`
@@ -176,12 +176,14 @@ hash-diary wallet import --private-key <base58-private-key> --no-password
 hash-diary write "今天天气很好"
 hash-diary write "Hello World" -u https://api.mainnet-beta.solana.com
 hash-diary write "日记内容" --keypair ./my-wallet.json
+hash-diary write "不等待确认" --no-wait
 echo "通过管道写入" | hash-diary write
 ```
 
 **输出示例 (text)**:
 ```
-交易已发送，签名: 5UfD...xK3m
+交易已发送，等待确认...
+交易确认成功 (Confirmed)，签名: 5UfD...xK3m
 ```
 
 **输出示例 (json)**:
@@ -316,7 +318,8 @@ HASH_DIARY_PASSWORD=<password> hash-diary mcp
   - 调用 RPC `getSignaturesForAddress` 时带上 `until=<last_signature>` 参数，仅拉取增量交易。
   - 解密新交易并追加到缓存。
   - 若用户指定 `--force-refresh`，则忽略 `last_signature` 全量拉取并重建缓存。
-- **安全性**: 缓存文件存储的是明文日记内容，因此必须确保 `~/.hash-diary/` 目录仅当前用户可读写 (chmod 700)。
+- **并发控制**: 读写缓存文件时必须使用文件锁（File Lock），防止多终端并发操作导致数据损坏。
+- **安全性**: 缓存文件存储的是明文日记内容，因此必须确保 `~/.hash-diary/` 目录及 `cache.json` 仅当前用户可读写 (chmod 600)。**警告：若本地环境被入侵，攻击者可直接读取缓存中的所有日记内容。**
 
 ## 5. 命令行接口设计
 
@@ -337,6 +340,9 @@ hash-diary <subcommand> [options]
   --verbose          显示详细日志（如 RPC 调用耗时、缓存命中情况）
   --help             显示帮助信息
   --version          显示版本号
+
+write 选项:
+  --no-wait          发送交易后立即返回，不等待确认 (默认: 等待 confirmed)
 
 wallet 子命令:
   wallet new         创建新钱包密钥对
