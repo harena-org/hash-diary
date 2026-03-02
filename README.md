@@ -2,13 +2,18 @@
 
 基于 Solana 区块链的命令行加密日记工具。将日记内容压缩、加密后写入链上 Memo 程序，实现不可篡改的私密存储。
 
+同时为**人类**和 **AI Agent** 设计——人类通过命令行直接使用，AI Agent 通过 MCP (Model Context Protocol) 协议调用，共享同一个钱包和日记数据。
+
+每条日记的链上交易费用固定为 **0.000005 SOL**（约 5000 lamports）。在 devnet 上使用时，SOL 可通过 `wallet airdrop` 免费领取，无需任何花费。
+
 ## 功能特性
 
+- **人机双模式** -- CLI 供人类终端使用，MCP Server 供 AI Agent (Claude Desktop / Cursor / OpenClaw) 调用，数据完全互通
 - **端到端加密** -- NaCl box (Curve25519-XSalsa20-Poly1305)，Ed25519 密钥自动转换为 X25519，仅持有私钥可解密
 - **Zlib 压缩** -- 自动压缩日记内容，单条约 500-800 个中文字符
 - **协议前缀** -- `HD:` 前缀标识 HashDiary 交易，跳过无关 Memo
 - **本地缓存** -- 增量同步 + 文件锁保护，支持多终端并发和多钱包隔离
-- **MCP Server** -- Model Context Protocol 模式，供 AI Agent (Claude Desktop / OpenClaw) 调用
+- **MCP Server** -- Model Context Protocol 模式，供 AI Agent 调用 `diary_write` / `diary_read` 工具
 - **密码保护** -- scrypt (N=32768, r=8, p=1) + AES-256-GCM 加密密钥文件
 - **Solana CLI 兼容** -- 明文钱包与 `solana-keygen` 格式互操作
 - **多网络** -- devnet / testnet / mainnet-beta 及自定义 RPC 端点
