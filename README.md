@@ -121,17 +121,26 @@ hash-diary wallet airdrop --amount 2   # 指定数量
 
 #### `wallet import`
 
-从已有的密钥文件或 Base58 私钥导入钱包。
+从已有的密钥文件、Base58 私钥或 BIP-39 助记词导入钱包。三种方式互斥。
 
 ```bash
+# 从密钥文件导入
 hash-diary wallet import /path/to/keypair.json
+
+# 从 Base58 私钥导入
 hash-diary wallet import --private-key <base58-private-key>
-hash-diary wallet import --private-key <key> --no-password
+
+# 从 BIP-39 助记词恢复（使用 Solana 标准派生路径 m/44'/501'/0'/0'）
+hash-diary wallet import --mnemonic "word1 word2 ... word12"
+hash-diary wallet import --mnemonic "word1 word2 ... word12" --passphrase "optional-bip39-passphrase"
+hash-diary wallet import --mnemonic "word1 word2 ... word12" --no-password
 ```
 
 | 选项 | 说明 |
 |------|------|
 | `--private-key` | Base58 编码的 64 字节 Ed25519 私钥 |
+| `--mnemonic` | BIP-39 助记词（12 或 24 个单词） |
+| `--passphrase` | 可选的 BIP-39 passphrase（非钱包加密密码） |
 | `--no-password` | 跳过密码，以明文保存 |
 
 ### write -- 写入日记

@@ -788,6 +788,96 @@ func TestImportFromBase58_ThenSaveAndLoad(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Test 7: Mnemonic Import + Crypto Round-Trip
+// ---------------------------------------------------------------------------
+
+func TestMnemonicImport_CryptoRoundTrip(t *testing.T) {
+	// Import from a well-known mnemonic and verify crypto operations work.
+	mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	kp, err := wallet.ImportFromMnemonic(mnemonic, "")
+	if err != nil {
+		t.Fatalf("ImportFromMnemonic() error: %v", err)
+	}
+
+	// Verify known address.
+	const wantAddr = "HAgk14JpMQLgt6rVgv7cBQFJWFto5Dqxi472uT3DKpqk"
+	if kp.Address() != wantAddr {
+		t.Errorf("address = %q, want %q", kp.Address(), wantAddr)
+	}
+
+	// Use the imported keypair for crypto operations.
+	originalText := "Diary entry from mnemonic-imported wallet."
+	memo, err := crypto.EncodeMemo(originalText, kp.PublicKey, kp.PrivateKey)
+	if err != nil {
+		t.Fatalf("EncodeMemo() error: %v", err)
+	}
+
+	decoded, err := crypto.DecodeMemo(memo, kp.PublicKey, kp.PrivateKey)
+	if err != nil {
+		t.Fatalf("DecodeMemo() error: %v", err)
+	}
+
+	if decoded != originalText {
+		t.Errorf("round-trip mismatch: got %q, want %q", decoded, originalText)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 8: Mnemonic Import + Save/Load Round-Trip (plaintext + encrypted)
+// ---------------------------------------------------------------------------
+
+func TestMnemonicImport_SaveLoadRoundTrip(t *testing.T) {
+	mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	kp, err := wallet.ImportFromMnemonic(mnemonic, "")
+	if err != nil {
+		t.Fatalf("ImportFromMnemonic() error: %v", err)
+	}
+
+	dir := t.TempDir()
+
+	// Plaintext round-trip.
+	plainPath := filepath.Join(dir, "mnemonic-plain.json")
+	if err := wallet.SavePlaintext(kp, plainPath); err != nil {
+		t.Fatalf("SavePlaintext() error: %v", err)
+	}
+	loadedPlain, err := wallet.LoadPlaintext(plainPath)
+	if err != nil {
+		t.Fatalf("LoadPlaintext() error: %v", err)
+	}
+	if loadedPlain.Address() != kp.Address() {
+		t.Errorf("plaintext round-trip address mismatch: got %q, want %q", loadedPlain.Address(), kp.Address())
+	}
+
+	// Encrypted round-trip.
+	encPath := filepath.Join(dir, "mnemonic-encrypted.json")
+	password := "mnemonic-test-pw"
+	if err := wallet.SaveEncrypted(kp, encPath, password); err != nil {
+		t.Fatalf("SaveEncrypted() error: %v", err)
+	}
+	loadedEnc, err := wallet.LoadEncrypted(encPath, password)
+	if err != nil {
+		t.Fatalf("LoadEncrypted() error: %v", err)
+	}
+	if loadedEnc.Address() != kp.Address() {
+		t.Errorf("encrypted round-trip address mismatch: got %q, want %q", loadedEnc.Address(), kp.Address())
+	}
+
+	// Verify the loaded encrypted wallet can be used for crypto.
+	originalText := "Encrypted mnemonic wallet crypto test."
+	memo, err := crypto.EncodeMemo(originalText, loadedEnc.PublicKey, loadedEnc.PrivateKey)
+	if err != nil {
+		t.Fatalf("EncodeMemo() error: %v", err)
+	}
+	decoded, err := crypto.DecodeMemo(memo, loadedEnc.PublicKey, loadedEnc.PrivateKey)
+	if err != nil {
+		t.Fatalf("DecodeMemo() error: %v", err)
+	}
+	if decoded != originalText {
+		t.Errorf("crypto round-trip mismatch: got %q, want %q", decoded, originalText)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Test: Full pipeline (wallet + crypto + cache)
 // ---------------------------------------------------------------------------
 

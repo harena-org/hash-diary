@@ -260,36 +260,65 @@ func newWalletAirdropCmd() *cobra.Command {
 func newWalletImportCmd() *cobra.Command {
 	var (
 		flagPrivateKey string
+		flagMnemonic   string
+		flagPassphrase string
 		flagNoPassword bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "import [file]",
 		Short: "Import an existing wallet",
-		Long:  "Import an existing Solana wallet from a keypair file or a Base58-encoded private key.",
+		Long: `Import an existing Solana wallet from a keypair file, Base58-encoded private key, or BIP-39 mnemonic.
+
+Three import methods (mutually exclusive):
+  1. Positional argument: path to a Solana CLI keypair JSON file
+  2. --private-key: Base58-encoded 64-byte Ed25519 private key
+  3. --mnemonic: BIP-39 mnemonic phrase (12 or 24 words), derives via m/44'/501'/0'/0'`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			f := newFormatter()
 			path := expandPath(flagKeypair)
 
+			// Mutual exclusion: count how many input methods are specified.
+			inputCount := 0
+			if flagPrivateKey != "" {
+				inputCount++
+			}
+			if flagMnemonic != "" {
+				inputCount++
+			}
+			if len(args) > 0 {
+				inputCount++
+			}
+			if inputCount > 1 {
+				return fmt.Errorf("请只使用一种导入方式：文件路径、--private-key 或 --mnemonic")
+			}
+			if inputCount == 0 {
+				return fmt.Errorf("请提供密钥文件路径，或使用 --private-key / --mnemonic 标志")
+			}
+
 			var kp *wallet.Keypair
 			var err error
 
-			// Parse input: either --private-key flag or positional arg (file path).
-			if flagPrivateKey != "" {
+			// Parse input: --mnemonic, --private-key, or positional arg (file path).
+			if flagMnemonic != "" {
+				f.VerboseLog("importing from BIP-39 mnemonic")
+				kp, err = wallet.ImportFromMnemonic(flagMnemonic, flagPassphrase)
+				if err != nil {
+					return fmt.Errorf("导入助记词失败: %w", err)
+				}
+			} else if flagPrivateKey != "" {
 				f.VerboseLog("importing from base58 private key")
 				kp, err = wallet.ImportFromBase58PrivateKey(flagPrivateKey)
 				if err != nil {
 					return fmt.Errorf("导入私钥失败: %w", err)
 				}
-			} else if len(args) > 0 {
+			} else {
 				srcPath := expandPath(args[0])
 				f.VerboseLog("importing from file: %s", srcPath)
 				kp, err = wallet.ImportFromFile(srcPath)
 				if err != nil {
 					return fmt.Errorf("导入密钥文件失败: %w", err)
 				}
-			} else {
-				return fmt.Errorf("请提供密钥文件路径或使用 --private-key 标志")
 			}
 
 			f.VerboseLog("imported keypair with address: %s", kp.Address())
@@ -345,6 +374,8 @@ func newWalletImportCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&flagPrivateKey, "private-key", "", "Base58-encoded private key to import")
+	cmd.Flags().StringVar(&flagMnemonic, "mnemonic", "", "BIP-39 mnemonic phrase (12 or 24 words)")
+	cmd.Flags().StringVar(&flagPassphrase, "passphrase", "", "Optional BIP-39 passphrase (not the wallet encryption password)")
 	cmd.Flags().BoolVar(&flagNoPassword, "no-password", false, "Import keypair without password encryption")
 
 	return cmd
