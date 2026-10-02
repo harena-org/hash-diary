@@ -21,7 +21,7 @@ func newWriteCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "write [text]",
 		Short: "Write a diary entry to blockchain",
-		Long:  "Write an encrypted diary entry to the Solana blockchain using the Memo program.",
+		Long:  "Write an encrypted diary entry to the Solana blockchain using the p-memo program.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			f := newFormatter()
@@ -76,7 +76,7 @@ func newWriteCmd() *cobra.Command {
 			}
 
 			// Build memo instruction manually (raw data, no length prefix).
-			memoProgramID := solana.MustPublicKeyFromBase58("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
+			memoProgramID := solana.MustPublicKeyFromBase58("Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH")
 			walletPubKey := solana.PublicKeyFromBytes(kp.PublicKey)
 
 			instruction := solana.NewInstruction(

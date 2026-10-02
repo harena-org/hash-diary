@@ -1,6 +1,6 @@
 # HashDiary (哈希日记)
 
-基于 Solana 区块链的命令行加密日记工具。将日记内容压缩、加密后写入链上 Memo 程序，实现不可篡改的私密存储。
+基于 Solana 区块链的命令行加密日记工具。将日记内容压缩、加密后写入链上 p-memo 程序，实现不可篡改的私密存储。
 
 同时为**人类**和 **AI Agent** 设计——人类通过命令行直接使用，AI Agent 通过 MCP (Model Context Protocol) 协议调用，共享同一个钱包和日记数据。
 
@@ -155,7 +155,7 @@ hash-diary wallet import --mnemonic "word1 word2 ... word12" --no-password
 
 ### write -- 写入日记
 
-将文本日记加密后写入 Solana Memo 程序。
+将文本日记加密后写入 Solana p-memo 程序。
 
 ```bash
 hash-diary write "今天天气很好"
@@ -280,7 +280,7 @@ hash-diary/
 | 编码格式 | `HD:` 前缀 + Standard Base64 (RFC 4648) |
 | 加密开销 | 24 字节随机 nonce + 16 字节 Poly1305 MAC = 40 字节 |
 | Memo 上限 | 512 字节（含前缀），明文上限约 344 字节 |
-| Memo Program | `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr` |
+| Memo Program | `Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH`（p-memo，Pinocchio 重写版，单签名约 600 CU，较原 SPL Memo 节省 ~95% 计算单元） |
 | 交易模式 | 自发自收（payer = signer = 当前钱包） |
 | 交易费用 | ~0.000005 SOL (5000 lamports) 每条 |
 | 确认级别 | `confirmed`，超时 60 秒（轮询间隔 2 秒） |

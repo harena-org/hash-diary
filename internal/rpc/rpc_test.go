@@ -14,12 +14,12 @@ import (
 // --- Mock RPC Client ---
 
 type mockRPCClient struct {
-	getBalanceFn                    func(ctx context.Context, pubKey solana.PublicKey, commitment solanarpc.CommitmentType) (*solanarpc.GetBalanceResult, error)
-	requestAirdropFn                func(ctx context.Context, account solana.PublicKey, lamports uint64, commitment solanarpc.CommitmentType) (solana.Signature, error)
-	sendTransactionWithOptsFn       func(ctx context.Context, tx *solana.Transaction, opts solanarpc.TransactionOpts) (solana.Signature, error)
-	getSignatureStatusesFn          func(ctx context.Context, searchHistory bool, sigs ...solana.Signature) (*solanarpc.GetSignatureStatusesResult, error)
-	getSignaturesForAddressOptsFn   func(ctx context.Context, account solana.PublicKey, opts *solanarpc.GetSignaturesForAddressOpts) ([]*solanarpc.TransactionSignature, error)
-	getTransactionFn                func(ctx context.Context, txSig solana.Signature, opts *solanarpc.GetTransactionOpts) (*solanarpc.GetTransactionResult, error)
+	getBalanceFn                  func(ctx context.Context, pubKey solana.PublicKey, commitment solanarpc.CommitmentType) (*solanarpc.GetBalanceResult, error)
+	requestAirdropFn              func(ctx context.Context, account solana.PublicKey, lamports uint64, commitment solanarpc.CommitmentType) (solana.Signature, error)
+	sendTransactionWithOptsFn     func(ctx context.Context, tx *solana.Transaction, opts solanarpc.TransactionOpts) (solana.Signature, error)
+	getSignatureStatusesFn        func(ctx context.Context, searchHistory bool, sigs ...solana.Signature) (*solanarpc.GetSignatureStatusesResult, error)
+	getSignaturesForAddressOptsFn func(ctx context.Context, account solana.PublicKey, opts *solanarpc.GetSignaturesForAddressOpts) ([]*solanarpc.TransactionSignature, error)
+	getTransactionFn              func(ctx context.Context, txSig solana.Signature, opts *solanarpc.GetTransactionOpts) (*solanarpc.GetTransactionResult, error)
 }
 
 func (m *mockRPCClient) GetBalance(ctx context.Context, pubKey solana.PublicKey, commitment solanarpc.CommitmentType) (*solanarpc.GetBalanceResult, error) {
@@ -633,10 +633,10 @@ func TestGetTransaction_Success(t *testing.T) {
 				BlockTime: &bt,
 				Meta: &solanarpc.TransactionMeta{
 					LogMessages: []string{
-						"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr invoke [1]",
+						"Program Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH invoke [1]",
 						`Program log: Memo (len 11): "Hello World"`,
-						"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr consumed 12345 of 200000 compute units",
-						"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr success",
+						"Program Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH consumed 12345 of 200000 compute units",
+						"Program Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH success",
 					},
 				},
 			}, nil
@@ -679,9 +679,9 @@ func TestTransactionResult_ExtractMemoData(t *testing.T) {
 		{
 			name: "standard memo log with quotes",
 			logMessages: []string{
-				"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr invoke [1]",
+				"Program Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH invoke [1]",
 				`Program log: Memo (len 11): "Hello World"`,
-				"Program MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr success",
+				"Program Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH success",
 			},
 			want: []string{"Hello World"},
 		},
@@ -719,6 +719,29 @@ func TestTransactionResult_ExtractMemoData(t *testing.T) {
 				`Program log: Memo (len 30): "HD:SGVsbG8gV29ybGQ="`,
 			},
 			want: []string{"HD:SGVsbG8gV29ybGQ="},
+		},
+		{
+			name: "p-memo format: data on next line without quotes",
+			logMessages: []string{
+				"Program Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH invoke [1]",
+				"Program log: Signed by:",
+				"Program log: FTsuB4MJB8rf3u8awhiPLGv7k5DoeQZFcpAMhoQ2SUGs",
+				"Program log: Memo (len 187)",
+				"Program log: HD:xhVQive+1uzECnxgNQwwIGxGvl0QQRXVp98wFSx6la8+fmpkGZytzXuxNaWx/pCaIYF2Fuic9edI+++17DCfobT56MFWmo7buPpIXr1Ejavwe6NGioKEGhuFpxBQQN0jqjlcE8WPy8/xjm6OCPKJJtdH97OvW0S9/4QbyztWDTzYK1efWO5Ojio=",
+				"Program Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH consumed 613 of 200000 compute units",
+				"Program Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH success",
+			},
+			want: []string{"HD:xhVQive+1uzECnxgNQwwIGxGvl0QQRXVp98wFSx6la8+fmpkGZytzXuxNaWx/pCaIYF2Fuic9edI+++17DCfobT56MFWmo7buPpIXr1Ejavwe6NGioKEGhuFpxBQQN0jqjlcE8WPy8/xjm6OCPKJJtdH97OvW0S9/4QbyztWDTzYK1efWO5Ojio="},
+		},
+		{
+			name: "p-memo multiple memos (data on next line)",
+			logMessages: []string{
+				"Program log: Memo (len 5)",
+				"Program log: First",
+				"Program log: Memo (len 6)",
+				"Program log: Second",
+			},
+			want: []string{"First", "Second"},
 		},
 	}
 

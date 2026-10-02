@@ -2,7 +2,7 @@
 
 ## 1. 产品概述
 
-HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通过 CLI 将文本日记写入链上 Memo 程序，实现内容的不可篡改存储，并可随时读取历史日记记录。
+HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通过 CLI 将文本日记写入链上 p-memo 程序，实现内容的不可篡改存储，并可随时读取历史日记记录。
 
 同时，HashDiary 提供 MCP (Model Context Protocol) Server 模式，使 OpenClaw 等 AI Agent 能够直接调用日记的读写能力，实现 AI 驱动的链上日记管理。
 
@@ -10,7 +10,7 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 
 | 概念 | 说明 |
 |------|------|
-| 链上存储 | 利用 Solana Memo Program 将日记内容附加到交易中，永久存储在区块链上 |
+| 链上存储 | 利用 Solana p-memo Program 将日记内容附加到交易中，永久存储在区块链上 |
 | 自发自收交易 | 交易的目标地址是当前钱包自身，形成"给自己写信"的模式 |
 | 协议前缀 | 明文前缀 `HD:`，用于快速识别 HashDiary 交易，避免解密无关 Memo |
 | 数据压缩 | 使用 Zlib 压缩日记内容，提升存储容量 |
@@ -22,7 +22,7 @@ HashDiary 是一个基于 Solana 区块链的命令行日记工具。用户通�
 ## 3. 目标用户
 
 - 区块链爱好者，希望将个人记录永久存储在链上
-- 开发者，用于学习 Solana 交易与 Memo 程序的交互
+- 开发者，用于学习 Solana 交易与 p-memo 程序的交互
 - AI Agent（如 OpenClaw），通过 MCP 协议自动化管理链上日记
 
 ## 4. 功能需求
@@ -402,7 +402,7 @@ read 选项:
 |------|------|
 | 语言 | Go |
 | 区块链 | Solana |
-| 链上程序 | Memo Program (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`) |
+| 链上程序 | p-memo Program (`Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH`) |
 | 日记加密 | Zlib 压缩 + Ed25519 → X25519 密钥转换 + NaCl box |
 | 密钥文件加密 | scrypt 密码派生 + AES-256-GCM |
 | 编码格式 | `HD:` 前缀 + Standard Base64 (RFC 4648) |

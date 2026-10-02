@@ -20,7 +20,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:     "hash-diary",
 	Short:   "HashDiary - A Solana blockchain diary tool",
-	Long:    "HashDiary is a CLI tool that writes encrypted diary entries to the Solana blockchain using the Memo program.",
+	Long:    "HashDiary is a CLI tool that writes encrypted diary entries to the Solana blockchain using the p-memo program.",
 	Version: "0.1.0",
 }
 

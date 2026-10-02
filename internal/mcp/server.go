@@ -110,7 +110,7 @@ func (s *Server) handleDiaryWrite(ctx context.Context, request gomcp.CallToolReq
 		return toolError(ErrCodeNetworkError, fmt.Sprintf("failed to get latest blockhash: %s", err)), nil
 	}
 
-	memoProgramID := solana.MustPublicKeyFromBase58("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr")
+	memoProgramID := solana.MustPublicKeyFromBase58("Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH")
 	walletPubKey := solana.PublicKeyFromBytes(s.keypair.PublicKey)
 
 	instruction := solana.NewInstruction(

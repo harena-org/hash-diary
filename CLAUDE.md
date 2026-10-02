@@ -14,7 +14,7 @@ go test ./internal/wallet/ -run TestImportFromMnemonic -v  # Run a single test
 
 ## Architecture
 
-HashDiary is a CLI tool that writes encrypted diary entries to the Solana blockchain via the Memo program. All user-facing text is in Chinese.
+HashDiary is a CLI tool that writes encrypted diary entries to the Solana blockchain via the p-memo program. All user-facing text is in Chinese.
 
 **Module:** `github.com/hash-diary/hash-diary` (Go 1.25.5)
 
@@ -43,6 +43,6 @@ HashDiary is a CLI tool that writes encrypted diary entries to the Solana blockc
 - **File permissions:** 0600 for wallet files, 0700 for directories
 - **Wallet storage:** plaintext format is Solana CLI compatible (JSON array of 64 bytes); encrypted uses scrypt+AES-256-GCM
 - **Cache:** `~/.hash-diary/cache.json` with `lastSignature` checkpoint for incremental sync; file-locked with `.lock` file
-- **Memo format:** Solana Memo program v2 logs as `Program log: Memo (len N): "data"` — the quotes must be stripped when parsing
+- **Memo format:** Uses p-memo (`Memo4c2pN8afCj432Lb7RMVKi9PbQnnW7ewFFaV3oAH`). p-memo logs on two lines — `Program log: Memo (len N)` then `Program log: <data>` (no quotes). The legacy Memo program logs inline as `Program log: Memo (len N): "data"` (quotes must be stripped). `ExtractMemoData` supports both formats for backwards compatibility.
 - **Global flags** (`flagURL`, `flagKeypair`, `flagPassword`, `flagFormat`, `flagVerbose`) are defined in `cmd/root.go` and used across all commands
 - **Tests** use table-driven style, `t.TempDir()` for file operations, and always run with `-race`

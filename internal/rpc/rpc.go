@@ -80,26 +80,46 @@ type TransactionResult struct {
 }
 
 // ExtractMemoData searches the log messages for Memo program data.
-// The Solana Memo program (v2) logs in the format:
+//
+// The legacy Memo program logs the memo inline on a single line:
 //
 //	Program log: Memo (len N): "data"
 //
-// Note: the data is wrapped in double quotes by the program's Rust {:?} formatter.
+// The p-memo program (Pinocchio reimplementation) logs the length and data
+// on two separate lines without quotes:
+//
+//	Program log: Memo (len N)
+//	Program log: data
+//
+// Both formats are supported for backwards compatibility.
 func (tr *TransactionResult) ExtractMemoData() []string {
 	if tr == nil {
 		return nil
 	}
 	var memos []string
-	for _, log := range tr.LogMessages {
-		if strings.Contains(log, "Memo (len") {
-			idx := strings.LastIndex(log, "): ")
-			if idx >= 0 {
-				data := log[idx+3:]
-				// Strip surrounding double quotes added by the Memo program's
-				// Rust {:?} debug formatter.
-				data = strings.TrimPrefix(data, "\"")
-				data = strings.TrimSuffix(data, "\"")
+	for i, log := range tr.LogMessages {
+		if !strings.Contains(log, "Memo (len") {
+			continue
+		}
+		// Legacy format: "Memo (len N): "data"" — data on the same line.
+		if idx := strings.LastIndex(log, "): "); idx >= 0 {
+			data := log[idx+3:]
+			// Strip surrounding double quotes added by the legacy program's
+			// Rust {:?} debug formatter.
+			data = strings.TrimPrefix(data, "\"")
+			data = strings.TrimSuffix(data, "\"")
+			memos = append(memos, data)
+			continue
+		}
+		// p-memo format: "Memo (len N)" followed by the data on the next line.
+		if i+1 < len(tr.LogMessages) {
+			next := tr.LogMessages[i+1]
+			// Strip the "Program log: " prefix if present.
+			data := strings.TrimPrefix(next, "Program log: ")
+			if data != next {
 				memos = append(memos, data)
+			} else {
+				memos = append(memos, next)
 			}
 		}
 	}
